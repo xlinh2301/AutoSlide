@@ -2,7 +2,7 @@
 id: SDD-SUB-20260918-04
 title: "Phase 5 Quality Gates: Structural Acceptance, Visual Findings, Bounded Repair & Human Review"
 author: agy_c
-status: DRAFT
+status: IMPLEMENTED
 main_spec: "[[.ai/specs/ADS-001/requirements.md]]"
 summary: "Implement two-tier quality gates combining structural diff verification, visual defect/overflow analysis, bounded repair loop policy, and human review escalations."
 decisions:
@@ -107,12 +107,12 @@ Cung cấp lát cắt kiểm soát chất lượng & sửa lỗi (Phase 5) cho A
 ---
 
 ## 4. Tiêu chí Chấp nhận (Acceptance Criteria)
-- [ ] `StructuralAcceptanceGate` chấp thuận (verdict `PASSED`) các diff chỉ chứa intended changes và từ chối (verdict `FAILED`) khi có unintended changes ngoài scope.
-- [ ] `VisualQualityGate` phát hiện chính xác shape tràn ra ngoài kích thước slide (`BOUNDS_CLIPPING`) và text vượt kích thước box (`TEXT_OVERFLOW`).
-- [ ] `RepairLoopController` sinh `RepairDecision` với hành động `REPAIR` kèm gợi ý sửa khi `attempt < max_attempts`.
-- [ ] `RepairLoopController` sinh hành động `ESCALATE_REVIEW` khi `attempt >= max_attempts` (ngăn chặn lặp vô tận).
-- [ ] Báo cáo chất lượng `artifacts/quality_report.json` và `artifacts/visual_findings.json` được sinh đầy đủ trong job workspace.
-- [ ] Toàn bộ test suite (Phase 1 + Phase 2 + Phase 3 + Phase 4 + Phase 5) đạt 100% passing rate trên pytest, `compileall` sạch và `sanitizer-engine pre-commit` pass.
+- [x] `StructuralAcceptanceGate` chấp thuận (verdict `PASSED`) các diff chỉ chứa intended changes và từ chối (verdict `FAILED`) khi có unintended changes ngoài scope.
+- [x] `VisualQualityGate` phát hiện chính xác shape tràn ra ngoài kích thước slide (`BOUNDS_CLIPPING`) và text vượt kích thước box (`TEXT_OVERFLOW`).
+- [x] `RepairLoopController` sinh `RepairDecision` với hành động `REPAIR` kèm gợi ý sửa khi `attempt < max_attempts`.
+- [x] `RepairLoopController` sinh hành động `ESCALATE_REVIEW` khi `attempt >= max_attempts` (ngăn chặn lặp vô tận).
+- [x] Báo cáo chất lượng `artifacts/quality_report.json` và `artifacts/visual_findings.json` được sinh đầy đủ trong job workspace.
+- [x] Toàn bộ test suite (Phase 1 + Phase 2 + Phase 3 + Phase 4 + Phase 5) đạt 100% passing rate trên pytest, `compileall` sạch và `sanitizer-engine pre-commit` pass.
 
 ---
 
