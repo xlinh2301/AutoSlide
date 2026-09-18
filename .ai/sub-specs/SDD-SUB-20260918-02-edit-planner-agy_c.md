@@ -2,7 +2,7 @@
 id: SDD-SUB-20260918-02
 title: Phase 3 Edit Planner: TaskPlan Schema, Operation Vocabulary, Prompt Builder & Policy Gate
 author: agy_c
-status: DRAFT
+status: IMPLEMENTED
 main_spec: "[[.ai/specs/ADS-001/requirements.md]]"
 summary: "Define versioned TaskPlan JSON schema, allowlisted edit operation vocabulary, prompt payload builder, and ambiguity/low-confidence policy gate with golden and rejection-matrix tests."
 decisions:
@@ -31,7 +31,7 @@ risk_level: LOW
 > [!ABSTRACT] Tóm tắt cho AI
 > **Mục tiêu**: Thiết lập hợp đồng định hình kế hoạch biên tập (`TaskPlan`), từ vựng thao tác cho phép (allowlisted edit operations), bộ sinh prompt payload nạp context gọn nhẹ, và cổng kiểm duyệt chính sách (`PolicyGate`) ngăn chặn câu lệnh mơ hồ, thao tác không an toàn hoặc độ tin cậy thấp.
 > **Quyết định then chốt**: Pydantic v2 discriminated unions; từ vựng whitelist cố định; prompt builder phi secret không đòi hỏi API key; policy gate từ chối code tự do và kế hoạch thiếu mục tiêu rõ ràng.
-> **Rủi ro**: #risk/LOW | **Trạng thái**: #status/DRAFT
+> **Rủi ro**: #risk/LOW | **Trạng thái**: #status/IMPLEMENTED
 
 ---
 
@@ -103,17 +103,17 @@ Cung cấp lát cắt lập kế hoạch (Phase 3) cho AutoSlide:
 ---
 
 ## 4. Tiêu chí Chấp nhận (Acceptance Criteria)
-- [ ] Schema `TaskPlan` serialize/deserialize 100% hợp lệ với Pydantic v2, có trường `schema_version == "1.0"`.
-- [ ] Mọi operation thuộc tập allowlist (`replace_text`, `format_text`, `replace_image`, `move_resize_shape`, `duplicate_slide`, `delete_slide`) đều có schema định hình chặt chẽ kèm danh sách `preserve` và `postconditions`.
-- [ ] `PromptPayloadBuilder` tạo payload đầy đủ thông tin hướng dẫn, inventory rút gọn, không chứa API key hoặc đường dẫn nhạy cảm của host.
-- [ ] `PolicyGate` bắt và từ chối 100% các trường hợp vi phạm:
+- [x] Schema `TaskPlan` serialize/deserialize 100% hợp lệ với Pydantic v2, có trường `schema_version == "1.0"`.
+- [x] Mọi operation thuộc tập allowlist (`replace_text`, `format_text`, `replace_image`, `move_resize_shape`, `duplicate_slide`, `delete_slide`) đều có schema định hình chặt chẽ kèm danh sách `preserve` và `postconditions`.
+- [x] `PromptPayloadBuilder` tạo payload đầy đủ thông tin hướng dẫn, inventory rút gọn, không chứa API key hoặc đường dẫn nhạy cảm của host.
+- [x] `PolicyGate` bắt và từ chối 100% các trường hợp vi phạm:
   - Operation type không nằm trong allowlist $\rightarrow$ `UnknownOperationError`.
   - Target tham chiếu đến fingerprint không tồn tại $\rightarrow$ `AmbiguousTargetError`.
   - Confidence < 0.80 $\rightarrow$ đánh dấu `requires_review: True` hoặc `LowConfidenceError`.
   - Bất kỳ format code tự do / script snippet $\rightarrow$ `MalformedPlanError` / `PolicyViolationError`.
-- [ ] Ma trận kiểm thử Golden plans (ít nhất 5 kịch bản phổ biến) pass 100%.
-- [ ] Ma trận Rejection matrix (ít nhất 6 kịch bản sai lệch/vi phạm) được phát hiện chính xác.
-- [ ] Toàn bộ test suite (Phase 1 + Phase 2 + Phase 3) đạt 100% passing rate trên pytest, `compileall` sạch và `sanitizer-engine pre-commit` pass.
+- [x] Ma trận kiểm thử Golden plans (ít nhất 5 kịch bản phổ biến) pass 100%.
+- [x] Ma trận Rejection matrix (ít nhất 6 kịch bản sai lệch/vi phạm) được phát hiện chính xác.
+- [x] Toàn bộ test suite (Phase 1 + Phase 2 + Phase 3) đạt 100% passing rate trên pytest, `compileall` sạch và `sanitizer-engine pre-commit` pass.
 
 ---
 
