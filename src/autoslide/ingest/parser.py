@@ -313,6 +313,8 @@ class PPTXIngestor:
                     )
 
         raw_text = "".join(raw_text_parts)
+        if not raw_text and table_data:
+            raw_text = " ".join(" ".join(row) for row in table_data if row).strip()
 
         # 5. Recursive Group Shape handling
         if tag == "grpSp":

@@ -37,14 +37,48 @@
         <div class="file-selected-badge" id="fileBadge"></div>
       </div>
 
-      <!-- 2. Edit Instruction -->
-      <div class="form-group">
-        <div class="section-title">2. Natural-Language Edit</div>
-        <label for="instructionInput">Instruction prompt</label>
-        <textarea id="instructionInput" placeholder="e.g. Update executive summary title on slide 1 and resize the financial table..." aria-required="true"></textarea>
+      <!-- 2. Target Edit Scope -->
+      <div class="form-group" id="scopeGroup">
+        <div class="section-title">2. Target Edit Scope</div>
+        <div class="scope-options" role="radiogroup" aria-label="Target Edit Scope">
+          <label class="scope-pill active" id="scopePillSlide">
+            <input type="radio" name="scopeKind" value="slide" checked>
+            <span>Current Slide</span>
+          </label>
+          <label class="scope-pill" id="scopePillRegion">
+            <input type="radio" name="scopeKind" value="region">
+            <span>Selected Region</span>
+          </label>
+          <label class="scope-pill" id="scopePillDeck">
+            <input type="radio" name="scopeKind" value="deck">
+            <span>All Slides</span>
+          </label>
+        </div>
+
+        <div class="scope-row" id="slideSelectRow">
+          <label for="scopeSlideSelect">Target Slide:</label>
+          <select id="scopeSlideSelect" aria-label="Target slide selector">
+            <option value="1">Slide 1</option>
+          </select>
+        </div>
+
+        <div class="region-badge" id="regionBadge" style="display: none;">
+          <div class="region-info">
+            <span class="region-icon">🎯</span>
+            <span id="regionCoordsLabel">Region: (0, 0, 0, 0)</span>
+          </div>
+          <button type="button" class="btn-text-action" id="btnClearRegion">Clear</button>
+        </div>
       </div>
 
-      <!-- 3. Runtime Selector -->
+      <!-- 3. Edit Instruction -->
+      <div class="form-group">
+        <div class="section-title">3. Natural-Language Edit</div>
+        <label for="instructionInput">Instruction prompt</label>
+        <textarea id="instructionInput" placeholder="e.g. Update executive summary title and resize the financial table..." aria-required="true"></textarea>
+      </div>
+
+      <!-- 4. Runtime Selector -->
       <div class="form-group">
         <label for="runtimeSelect">Agent CLI Runtime</label>
         <select id="runtimeSelect" aria-label="Select AI runtime">
@@ -102,6 +136,13 @@
       <div class="preview-card">
         <div class="preview-header">
           <div class="section-title" style="margin-bottom: 0;">Interactive Slide Diff Studio</div>
+          <!-- Preview Navigator -->
+          <div class="preview-navigator" id="previewNavigator" style="display: none;">
+            <span class="nav-caption">Slide:</span>
+            <div class="nav-pills" id="navPills">
+              <!-- Dynamically populated slide buttons -->
+            </div>
+          </div>
         </div>
 
         <div class="preview-split">
@@ -109,9 +150,13 @@
           <div class="preview-pane">
             <div class="pane-label">
               <span style="color: var(--text-muted);">●</span> Original Slide
+              <span class="pane-action-hint" id="paneHintOriginal">(Click-drag rectangle on slide to target region)</span>
             </div>
-            <div class="slide-frame">
+            <div class="slide-frame" id="beforeFrame">
               <img id="beforeImg" src="" alt="Original Slide Preview" style="display: none;">
+              <div class="selection-overlay-canvas" id="selectionOverlayCanvas">
+                <div class="selection-rect" id="selectionRect" style="display: none;"></div>
+              </div>
               <div class="empty-placeholder" id="beforePlaceholder">
                 <span>📄 No slide loaded</span>
               </div>
@@ -122,9 +167,11 @@
           <div class="preview-pane">
             <div class="pane-label">
               <span style="color: var(--accent-primary);">●</span> Modified Slide
+              <span class="diff-badge" id="diffBadge" style="display: none;">Modified</span>
             </div>
-            <div class="slide-frame">
+            <div class="slide-frame" id="afterFrame">
               <img id="afterImg" src="" alt="Modified Slide Preview" style="display: none;">
+              <div class="highlight-overlay-layer" id="highlightOverlayLayer"></div>
               <div class="empty-placeholder" id="afterPlaceholder">
                 <span>⚡ Awaiting edits</span>
               </div>
@@ -149,7 +196,7 @@
       <div class="action-bar" id="actionBar" style="display: none;">
         <div>
           <div style="font-weight: 600; font-size: 0.95rem;">Human Review Required</div>
-          <div style="font-size: 0.8rem; color: var(--text-muted);">Please review the before/after slides and findings above before finalizing.</div>
+          <div style="font-size: 0.8rem; color: var(--text-muted);">Please review the before/after slides, changed overlays, and findings above before finalizing.</div>
         </div>
         <div class="action-buttons">
           <button class="btn-danger" id="btnReject">Discard & Reject</button>

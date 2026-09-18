@@ -32,6 +32,7 @@ class BasePreviewRenderer(ABC):
         pptx_path: Path,
         workspace: JobWorkspace,
         slide_count: int = 1,
+        prefix: str = "",
     ) -> PreviewManifest:
         """Render slide thumbnails and write previews/manifest.json to workspace."""
 
@@ -44,20 +45,25 @@ class MockPreviewRenderer(BasePreviewRenderer):
         pptx_path: Path,
         workspace: JobWorkspace,
         slide_count: int = 1,
+        prefix: str = "",
     ) -> PreviewManifest:
         previews_dir = workspace.root / "previews"
         previews_dir.mkdir(parents=True, exist_ok=True)
 
         preview_items: list[SlidePreview] = []
         for i in range(1, slide_count + 1):
-            img_filename = f"slide_{i:03d}.png"
-            img_path = previews_dir / img_filename
+            base_filename = f"slide_{i:03d}.png"
+            img_path = previews_dir / base_filename
             img_path.write_bytes(MINIMAL_PNG_BYTES)
+
+            if prefix:
+                prefixed_filename = f"slide_{i:03d}_{prefix}.png"
+                (previews_dir / prefixed_filename).write_bytes(MINIMAL_PNG_BYTES)
 
             preview_items.append(
                 SlidePreview(
                     slide_index=i,
-                    image_path=f"previews/{img_filename}",
+                    image_path=f"previews/{base_filename}",
                     width=1920,
                     height=1080,
                     format="png",
@@ -92,6 +98,7 @@ class LibreOfficePreviewRenderer(BasePreviewRenderer):
         pptx_path: Path,
         workspace: JobWorkspace,
         slide_count: int = 1,
+        prefix: str = "",
     ) -> PreviewManifest:
         if not shutil.which(self.soffice_bin):
             raise RenderError(f"LibreOffice binary not found at '{self.soffice_bin}'")
@@ -176,6 +183,9 @@ class LibreOfficePreviewRenderer(BasePreviewRenderer):
                     target_name = f"slide_{idx:03d}.png"
                     target_path = previews_dir / target_name
                     shutil.copy2(png_file, target_path)
+                    if prefix:
+                        prefixed_path = previews_dir / f"slide_{idx:03d}_{prefix}.png"
+                        shutil.copy2(png_file, prefixed_path)
 
                     preview_items.append(
                         SlidePreview(
@@ -197,6 +207,9 @@ class LibreOfficePreviewRenderer(BasePreviewRenderer):
                         target_name = f"slide_{idx:03d}.png"
                         target_path = previews_dir / target_name
                         pix.save(str(target_path))
+                        if prefix:
+                            prefixed_path = previews_dir / f"slide_{idx:03d}_{prefix}.png"
+                            pix.save(str(prefixed_path))
 
                         preview_items.append(
                             SlidePreview(
@@ -214,6 +227,9 @@ class LibreOfficePreviewRenderer(BasePreviewRenderer):
                         img_filename = f"slide_{i:03d}.png"
                         img_path = previews_dir / img_filename
                         img_path.write_bytes(MINIMAL_PNG_BYTES)
+                        if prefix:
+                            prefixed_path = previews_dir / f"slide_{i:03d}_{prefix}.png"
+                            prefixed_path.write_bytes(MINIMAL_PNG_BYTES)
                         preview_items.append(
                             SlidePreview(
                                 slide_index=i,

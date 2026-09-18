@@ -63,13 +63,13 @@ Deliver one vertical workbench slice that makes edit scope explicit and reviewab
 
 ## 4. Tiêu chí Chấp nhận (Acceptance Criteria)
 
-- [ ] Existing prompt-only job creation remains backward compatible.
-- [ ] User can select one slide and submit a prompt; API event records the slide scope.
-- [ ] User can drag a region on a slide preview; region coordinates are sent as structured scope.
-- [ ] User can select all slides and submit one prompt; planner receives deck scope.
-- [ ] Completed jobs expose original/updated preview pairs and changed-region highlights.
-- [ ] Structural diff remains available alongside visual diff and original PPTX is unchanged.
-- [ ] Ambiguous/unresolvable region target transitions to review/clarification.
+- [x] Existing prompt-only job creation remains backward compatible.
+- [x] User can select one slide and submit a prompt; API event records the slide scope.
+- [x] User can drag a region on a slide preview; region coordinates are sent as structured scope.
+- [x] User can select all slides and submit one prompt; planner receives deck scope.
+- [x] Completed jobs expose original/updated preview pairs and changed-region highlights.
+- [x] Structural diff remains available alongside visual diff and original PPTX is unchanged.
+- [x] Ambiguous/unresolvable region target transitions to review/clarification.
 
 ## 5. Kế hoạch Kiểm tra (Verification Plan)
 

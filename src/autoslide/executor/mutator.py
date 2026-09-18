@@ -87,6 +87,9 @@ def apply_replace_text(
 
     tx_body = shape_elem.find("p:txBody", NS)
     if tx_body is None:
+        # Support table graphicFrame elements
+        tx_body = shape_elem.find(".//a:tc/a:txBody", NS)
+    if tx_body is None:
         tx_body = ET.SubElement(shape_elem, f"{{{NS['p']}}}txBody")
         ET.SubElement(tx_body, f"{{{NS['a']}}}bodyPr")
 
