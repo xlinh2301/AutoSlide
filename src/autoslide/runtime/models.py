@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
 from autoslide.events import Redactor
 
@@ -19,6 +19,12 @@ class RuntimeStatus(BaseModel):
     authenticated: bool = False
     executable: str | None = None
     reason: str | None = None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def available(self) -> bool:
+        """Returns True only when the runtime is installed and authenticated."""
+        return bool(self.installed and self.authenticated)
 
     @field_validator("version", "reason", mode="after")
     @classmethod

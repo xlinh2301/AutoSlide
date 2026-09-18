@@ -27,15 +27,15 @@ The Phase 6 Local Workbench slice was implemented following the approved sub-spe
    - `JobOrchestrator`: Coordinates the full workflow connecting Ingestion (`PPTXIngestor`), Planning (`PolicyGate`), Execution (`PPTXExecutor`), and Verification (`StructuralAcceptanceGate`, `VisualQualityGate`, `RepairLoopController`).
    - Automatically writes machine-readable evidence (`task_plan.json`, `quality_report.json`, `visual_findings.json`).
 
-4. **Lifecycle State Machine Extensions (`src/autoslide/jobs/`)**:
-   - Added `REJECTED` state and updated state transitions in `JobRegistry`.
-   - Added `JobDecisionRequest` and `JobDecisionResponse` models.
+5. **Runtime Readiness Contract Alignment (`src/autoslide/runtime/models.py`, `src/autoslide/ui/static/js/workbench.js`)**:
+   - Added `available` computed field to `RuntimeStatus` (`installed and authenticated`).
+   - Updated client-side `initRuntimes` to correctly enable only available runtimes and display status accurately.
 
 ---
 
 ## 2. Verification Results
 
-- **Phase 6 Test Suites**: 7 / 7 passed (`tests/api/test_workbench_api.py`, `tests/integration/test_orchestrator_pipeline.py`).
-- **Full Regression Suite**: 104 / 104 passed across all project modules (`pytest`).
+- **Phase 6 Test Suites**: 8 / 8 passed (`tests/api/test_workbench_api.py`, `tests/integration/test_orchestrator_pipeline.py`).
+- **Full Regression Suite**: 105 / 105 passed across all project modules (`pytest`).
 - **Bytecode Compilation**: `python3 -m compileall src tests` passed with 0 errors.
 - **Git Hygiene**: Clean diff, no secrets or local machine paths.

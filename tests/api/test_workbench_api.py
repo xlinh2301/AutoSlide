@@ -116,3 +116,63 @@ def test_submit_decision_nonexistent_job_returns_404(client):
         json={"decision": "approve"},
     )
     assert res.status_code == 404
+
+
+def test_runtimes_endpoint_readiness_and_contract(tmp_path: Path):
+    from autoslide.runtime.base import RuntimeAdapter, RuntimeHandle
+    from autoslide.runtime.models import RuntimeStatus
+
+    class MockReadyAdapter(RuntimeAdapter):
+        @property
+        def name(self) -> str:
+            return "ready-agent"
+
+        def detect(self) -> RuntimeStatus:
+            return RuntimeStatus(name="ready-agent", installed=True, authenticated=True)
+
+        def start(self, job_context, prompt_payload):
+            raise NotImplementedError
+
+        def stream(self, handle):
+            raise NotImplementedError
+
+        def cancel(self, handle):
+            raise NotImplementedError
+
+    class MockUnauthenticatedAdapter(RuntimeAdapter):
+        @property
+        def name(self) -> str:
+            return "unauthenticated-agent"
+
+        def detect(self) -> RuntimeStatus:
+            return RuntimeStatus(name="unauthenticated-agent", installed=True, authenticated=False, reason="Auth missing")
+
+        def start(self, job_context, prompt_payload):
+            raise NotImplementedError
+
+        def stream(self, handle):
+            raise NotImplementedError
+
+        def cancel(self, handle):
+            raise NotImplementedError
+
+    runtime_registry = RuntimeRegistry([MockReadyAdapter(), MockUnauthenticatedAdapter()])
+    settings = Settings(data_root=tmp_path / "data")
+    app = create_app(settings=settings, runtime_registry=runtime_registry)
+    test_client = TestClient(app)
+
+    res = test_client.get("/api/v1/runtimes")
+    assert res.status_code == 200
+    runtimes = res.json()
+
+    ready = next((r for r in runtimes if r["name"] == "ready-agent"), None)
+    assert ready is not None
+    assert ready["installed"] is True
+    assert ready["authenticated"] is True
+    assert ready["available"] is True
+
+    unauthed = next((r for r in runtimes if r["name"] == "unauthenticated-agent"), None)
+    assert unauthed is not None
+    assert unauthed["installed"] is True
+    assert unauthed["authenticated"] is False
+    assert unauthed["available"] is False

@@ -19,6 +19,13 @@ def test_runtime_status_fields_and_immutability():
     assert status.authenticated is True
     assert status.executable == "/usr/local/bin/codex"
     assert status.reason is None
+    assert status.available is True
+
+    unauthed = RuntimeStatus(name="codex", installed=True, authenticated=False)
+    assert unauthed.available is False
+
+    not_installed = RuntimeStatus(name="codex", installed=False, authenticated=True)
+    assert not_installed.available is False
 
     with pytest.raises(Exception):
         status.installed = False  # type: ignore

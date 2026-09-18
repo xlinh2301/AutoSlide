@@ -39,21 +39,27 @@
       if (res.ok) {
         const runtimes = await res.json();
         runtimeSelect.innerHTML = "";
-        const available = runtimes.filter((r) => r.available);
+        const available = runtimes.filter((r) => r.available ?? (r.installed && r.authenticated));
         if (available.length > 0) {
           runtimeName.textContent = available[0].name;
           runtimeIndicator.style.backgroundColor = "var(--success)";
         } else {
-          runtimeName.textContent = "No runtime found";
+          runtimeName.textContent = "No runtime ready";
           runtimeIndicator.style.backgroundColor = "var(--danger)";
         }
         runtimes.forEach((r) => {
+          const isReady = Boolean(r.available ?? (r.installed && r.authenticated));
           const opt = document.createElement("option");
           opt.value = r.name;
-          opt.textContent = `${r.name} (${r.available ? "Ready" : "Unavailable"})`;
-          if (!r.available) opt.disabled = true;
+          opt.textContent = `${r.name} (${isReady ? "Ready" : "Unavailable"})`;
+          if (!isReady) {
+            opt.disabled = true;
+          }
           runtimeSelect.appendChild(opt);
         });
+        if (available.length > 0) {
+          runtimeSelect.value = available[0].name;
+        }
       }
     } catch (e) {
       console.warn("Failed to load runtimes:", e);
