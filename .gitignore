@@ -1,0 +1,27 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Testing and coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Packaging and environments
+dist/
+build/
+*.egg-info/
+.venv/
+venv/
+env/
+
+# AutoSlide runtime directories
+data/
+*.tmp
+
+# Local SDLC tools and watcher binaries
+.local/
+log.csv
+SESSION_STATE.json
+.agent-event.json
