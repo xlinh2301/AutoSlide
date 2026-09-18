@@ -2,7 +2,7 @@
 id: SDD-SUB-20260918-01
 title: Phase 2 PPTX Ingest & Inventory with Stable Fingerprints and Preview Manifest
 author: agy_b
-status: DRAFT
+status: IMPLEMENTED
 main_spec: "[[.ai/specs/ADS-001/requirements.md]]"
 summary: "Validate PPTX OPC packages, construct deterministic slide/shape/run inventory with composite fingerprints, and generate preview thumbnails without modifying original inputs."
 decisions:
@@ -27,7 +27,7 @@ risk_level: LOW
 > [!ABSTRACT] Tóm tắt cho AI
 > **Mục tiêu**: Xác thực gói OPC PPTX, từ chối file hỏng/không hỗ trợ, xây dựng inventory slide/shape/text-run có fingerprint định danh bền vững và tạo preview manifest qua renderer an toàn mà không biến đổi file gốc.
 > **Quyết định then chốt**: Sử dụng parser OOXML thuần Python; tính fingerprint tổ hợp ổn định; kiến trúc renderer đa tầng (LibreOffice CLI + PyMuPDF/pdftoppm + Mock); lưu trữ toàn bộ output trong job workspace.
-> **Rủi ro**: #risk/LOW | **Trạng thái**: #status/DRAFT
+> **Rủi ro**: #risk/LOW | **Trạng thái**: #status/IMPLEMENTED
 
 ---
 
@@ -76,12 +76,12 @@ Cung cấp lát cắt ingestion (Phase 2) cho AutoSlide:
 ---
 
 ## 4. Tiêu chí Chấp nhận (Acceptance Criteria)
-- [ ] Từ chối 100% các file input không phải zip, zip rỗng, zip thiếu `[Content_Types].xml`, hoặc XML không hợp lệ bằng `CorruptPackageError` hoặc `InvalidPackageError`.
-- [ ] Trích xuất đầy đủ slide count, slide dimensions, shape types (`sp`, `pic`, `tbl`, `graphicFrame`, `grpSp`), text runs (text, font size, bold/italic flag) và bounding boxes (`x, y, cx, cy`).
-- [ ] Composite fingerprint của một shape giữ nguyên giá trị khi parse lặp lại cùng một file (deterministic snapshot).
-- [ ] Renderer adapter sinh đúng số lượng preview tương ứng với số slide, ghi ảnh PNG vào thư mục `previews/` của job workspace và sinh `manifest.json`.
-- [ ] File template gốc trong `workspace.root / "input"` không bị ghi đè, sửa đổi hay truncate.
-- [ ] Toàn bộ test suite (cũ + mới) đạt 100% passing rate trên pytest, `compileall` sạch và `sanitizer-engine pre-commit` không phát hiện rò rỉ secret.
+- [x] Từ chối 100% các file input không phải zip, zip rỗng, zip thiếu `[Content_Types].xml`, hoặc XML không hợp lệ bằng `CorruptPackageError` hoặc `InvalidPackageError`.
+- [x] Trích xuất đầy đủ slide count, slide dimensions, shape types (`sp`, `pic`, `tbl`, `graphicFrame`, `grpSp`), text runs (text, font size, bold/italic flag) và bounding boxes (`x, y, cx, cy`).
+- [x] Composite fingerprint của một shape giữ nguyên giá trị khi parse lặp lại cùng một file (deterministic snapshot).
+- [x] Renderer adapter sinh đúng số lượng preview tương ứng với số slide, ghi ảnh PNG vào thư mục `previews/` của job workspace và sinh `manifest.json`.
+- [x] File template gốc trong `workspace.root / "input"` không bị ghi đè, sửa đổi hay truncate.
+- [x] Toàn bộ test suite (cũ + mới) đạt 100% passing rate trên pytest, `compileall` sạch và `sanitizer-engine pre-commit` không phát hiện rò rỉ secret.
 
 ---
 
