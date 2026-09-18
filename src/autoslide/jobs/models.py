@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from enum import Enum
 from pathlib import Path
+from typing import Literal
 from pydantic import BaseModel, ConfigDict
 
 
@@ -19,6 +20,7 @@ class JobState(str, Enum):
     REPAIRING = "REPAIRING"
     AWAITING_USER_APPROVAL = "AWAITING_USER_APPROVAL"
     ACCEPTED = "ACCEPTED"
+    REJECTED = "REJECTED"
     FAILED = "FAILED"
     CANCELLED = "CANCELLED"
 
@@ -48,3 +50,19 @@ class CheckpointRecord(BaseModel):
     sha256: str
     created_at: str
     parent_checkpoint_id: str | None = None
+
+
+class JobDecisionRequest(BaseModel):
+    """Payload for submitting human review decisions (approve, reject, repair)."""
+
+    decision: Literal["approve", "reject", "repair"]
+    feedback: str | None = None
+
+
+class JobDecisionResponse(BaseModel):
+    """Response returned after processing a human review decision."""
+
+    job_id: str
+    state: JobState
+    message: str
+    download_url: str | None = None

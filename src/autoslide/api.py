@@ -2,18 +2,23 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
+import json
 from pathlib import Path
+from typing import AsyncGenerator
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 
 from autoslide.config import Settings
 from autoslide.events import EventLog
-from autoslide.jobs.models import JobState
+from autoslide.jobs.models import JobDecisionRequest, JobDecisionResponse, JobRecord, JobState
 from autoslide.jobs.registry import JobRegistry
 from autoslide.jobs.workspace import JobWorkspace
 from autoslide.runtime.discovery import RuntimeRegistry
+from autoslide.ui import STATIC_DIR, TEMPLATES_DIR
 
 
 def create_app(
@@ -35,6 +40,19 @@ def create_app(
         version="0.1.0",
         description="Local-first slide editing job runtime and agent orchestrator",
     )
+
+    # Static assets mount
+    if STATIC_DIR.exists():
+        app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+    # Workbench UI Web Routes
+    @app.get("/", response_class=HTMLResponse)
+    @app.get("/ui", response_class=HTMLResponse)
+    def render_workbench() -> HTMLResponse:
+        index_path = TEMPLATES_DIR / "index.html"
+        if not index_path.exists():
+            return HTMLResponse("<h1>AutoSlide Workbench UI</h1>", status_code=200)
+        return HTMLResponse(index_path.read_text(encoding="utf-8"), status_code=200)
 
     @app.get("/health")
     def health_check() -> dict[str, str]:
@@ -114,6 +132,78 @@ def create_app(
         events = app_event_log.get_events(job_id)
         return [e.model_dump() for e in events]
 
+    @app.get("/api/v1/jobs/{job_id}/events/stream")
+    async def stream_job_events(job_id: str) -> StreamingResponse:
+        try:
+            app_registry.get(job_id)
+        except KeyError:
+            raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+
+        async def event_generator() -> AsyncGenerator[str, None]:
+            seen = 0
+            for _ in range(30):
+                events = app_event_log.get_events(job_id)
+                if len(events) > seen:
+                    for ev in events[seen:]:
+                        yield f"event: agent_event\ndata: {ev.model_dump_json()}\n\n"
+                    seen = len(events)
+                await asyncio.sleep(0.5)
+
+        return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+    @app.post("/api/v1/jobs/{job_id}/decision")
+    def submit_decision(job_id: str, request: JobDecisionRequest) -> dict:
+        try:
+            current_job = app_registry.get(job_id)
+        except KeyError:
+            raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+
+        decision = request.decision
+        target_state: JobState
+
+        if decision == "approve":
+            target_state = JobState.ACCEPTED
+            message = "Job approved and marked as accepted."
+            download_url = f"/api/v1/jobs/{job_id}/artifacts/presentation.pptx"
+        elif decision == "reject":
+            target_state = JobState.REJECTED
+            message = "Job rejected by user."
+            download_url = None
+        elif decision == "repair":
+            target_state = JobState.REPAIRING
+            message = "Job repair requested."
+            download_url = None
+        else:
+            raise HTTPException(status_code=400, detail=f"Unsupported decision '{decision}'")
+
+        try:
+            # Force or transition based on current state
+            if current_job.state in (JobState.AWAITING_USER_APPROVAL, JobState.VERIFYING, JobState.CREATED):
+                updated_job = app_registry.transition(job_id, target_state)
+            else:
+                app_registry.force_state(job_id, target_state)
+                updated_job = app_registry.get(job_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc))
+
+        app_event_log.append(
+            job_id,
+            "HUMAN_DECISION",
+            {
+                "decision": decision,
+                "feedback": request.feedback,
+                "resulting_state": target_state.value,
+            },
+        )
+
+        resp = JobDecisionResponse(
+            job_id=job_id,
+            state=updated_job.state,
+            message=message,
+            download_url=download_url,
+        )
+        return resp.model_dump()
+
     @app.post("/api/v1/jobs/{job_id}/cancel")
     def cancel_job(job_id: str) -> dict:
         try:
@@ -142,6 +232,8 @@ def create_app(
             workspace_root / "checkpoints",
             workspace_root / "artifacts",
             workspace_root / "previews",
+            workspace_root / "working",
+            workspace_root / "input",
         ]
 
         found_path: Path | None = None

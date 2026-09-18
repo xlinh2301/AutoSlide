@@ -23,12 +23,14 @@ VALID_TRANSITIONS: dict[JobState, set[JobState]] = {
     JobState.RENDERING: {JobState.VERIFYING, JobState.FAILED, JobState.CANCELLED},
     JobState.VERIFYING: {
         JobState.REPAIRING,
+        JobState.PLANNING,
         JobState.AWAITING_USER_APPROVAL,
         JobState.ACCEPTED,
         JobState.FAILED,
         JobState.CANCELLED,
     },
     JobState.REPAIRING: {
+        JobState.PLANNING,
         JobState.EXECUTING,
         JobState.RENDERING,
         JobState.FAILED,
@@ -36,11 +38,14 @@ VALID_TRANSITIONS: dict[JobState, set[JobState]] = {
     },
     JobState.AWAITING_USER_APPROVAL: {
         JobState.ACCEPTED,
+        JobState.REJECTED,
         JobState.REPAIRING,
+        JobState.PLANNING,
         JobState.FAILED,
         JobState.CANCELLED,
     },
     JobState.ACCEPTED: set(),
+    JobState.REJECTED: set(),
     JobState.FAILED: set(),
     JobState.CANCELLED: {JobState.CANCELLED},
 }
@@ -53,6 +58,8 @@ class JobRegistry:
 
     def __init__(self, db_path: Path | str = ":memory:"):
         self.db_path = str(db_path)
+        if self.db_path != ":memory:":
+            Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._init_db()

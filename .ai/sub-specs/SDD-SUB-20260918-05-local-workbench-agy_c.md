@@ -2,7 +2,7 @@
 id: SDD-SUB-20260918-05
 title: "Phase 6 Local Workbench: Upload, Live Progress, Before/After Comparison, Quality Review & Artifact Delivery"
 author: agy_c
-status: DRAFT
+status: IMPLEMENTED
 main_spec: "[[.ai/specs/ADS-001/requirements.md]]"
 summary: "Implement the local cross-platform web workbench providing presentation upload, live event streaming, before/after visual comparison, quality findings display, human review decisions, and artifact downloads."
 decisions:
@@ -147,14 +147,14 @@ stateDiagram-v2
 
 ## 4. Tiêu chí Chấp nhận (Acceptance Criteria)
 
-- [ ] FastAPI backend phục vụ giao diện Web UI tại route `/` và `/ui` với đầy đủ CSS/JS cục bộ (không gọi bất kỳ domain bên ngoài nào).
-- [ ] UI cho phép người dùng kéo thả upload file `.pptx`, nhập prompt chỉnh sửa và gửi tạo job thành công.
-- [ ] Luồng sự kiện hiển thị thời gian thực các bước xử lý và nhật ký hoạt động có khử thông tin nhạy cảm.
-- [ ] Giao diện so sánh trực quan (Before/After Previews) hiển thị hình ảnh slide trước và sau khi chỉnh sửa cùng danh sách phát hiện chất lượng (`VisualFinding` và `StructuralDiff`).
-- [ ] Endpoint `POST /api/v1/jobs/{job_id}/decision` xử lý chính xác 3 hành động: `approve` (chuyển `ACCEPTED`), `reject` (chuyển `REJECTED`), và `repair` (kích hoạt vòng lặp sửa).
-- [ ] Người dùng có thể tải về file `.pptx` đã hoàn thiện và các artifacts máy đọc (`quality_report.json`, `structural_diff.json`, `task_plan.json`).
-- [ ] Giao diện hiển thị bảng chẩn đoán runtime (`/api/v1/runtimes`) và xử lý an toàn các trạng thái lỗi cục bộ (file lỗi, timeout, render hỏng).
-- [ ] Toàn bộ test suite (Phase 1-6) đạt 100% passing rate trên pytest, `compileall` sạch và `sanitizer-engine pre-commit` pass.
+- [x] FastAPI backend phục vụ giao diện Web UI tại route `/` và `/ui` với đầy đủ CSS/JS cục bộ (không gọi bất kỳ domain bên ngoài nào).
+- [x] UI cho phép người dùng kéo thả upload file `.pptx`, nhập prompt chỉnh sửa và gửi tạo job thành công.
+- [x] Luồng sự kiện hiển thị thời gian thực các bước xử lý và nhật ký hoạt động có khử thông tin nhạy cảm.
+- [x] Giao diện so sánh trực quan (Before/After Previews) hiển thị hình ảnh slide trước và sau khi chỉnh sửa cùng danh sách phát hiện chất lượng (`VisualFinding` và `StructuralDiff`).
+- [x] Endpoint `POST /api/v1/jobs/{job_id}/decision` xử lý chính xác 3 hành động: `approve` (chuyển `ACCEPTED`), `reject` (chuyển `REJECTED`), và `repair` (kích hoạt vòng lặp sửa).
+- [x] Người dùng có thể tải về file `.pptx` đã hoàn thiện và các artifacts máy đọc (`quality_report.json`, `structural_diff.json`, `task_plan.json`).
+- [x] Giao diện hiển thị bảng chẩn đoán runtime (`/api/v1/runtimes`) và xử lý an toàn các trạng thái lỗi cục bộ (file lỗi, timeout, render hỏng).
+- [x] Toàn bộ test suite (Phase 1-6) đạt 100% passing rate trên pytest, `compileall` sạch và `sanitizer-engine pre-commit` pass.
 
 ---
 

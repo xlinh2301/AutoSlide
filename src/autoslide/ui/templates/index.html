@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AutoSlide Local Workbench</title>
+  <link rel="stylesheet" href="/static/css/workbench.css">
+</head>
+<body>
+  <!-- Top Navigation Header -->
+  <header class="header" role="banner">
+    <div class="logo-group">
+      <div class="logo-icon" aria-hidden="true">⚡</div>
+      <div class="logo-title">AutoSlide Workbench</div>
+    </div>
+    <div class="header-status">
+      <div class="runtime-badge" role="status" aria-label="Runtime Status">
+        <span class="runtime-indicator" id="runtimeIndicator"></span>
+        <span id="runtimeName">Checking runtime...</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Workbench Grid Layout -->
+  <main class="workbench-container" role="main">
+    <!-- Left Workspace Controls -->
+    <aside class="sidebar-panel">
+      <!-- 1. Presentation Upload -->
+      <div>
+        <div class="section-title">1. Presentation Upload</div>
+        <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Upload PowerPoint Presentation">
+          <input type="file" id="fileInput" accept=".pptx" aria-hidden="true">
+          <div class="dropzone-icon">📁</div>
+          <div class="dropzone-text">Drop .pptx file here or click to browse</div>
+          <div class="dropzone-hint">Local file only (max 50 MB)</div>
+        </div>
+        <div class="file-selected-badge" id="fileBadge"></div>
+      </div>
+
+      <!-- 2. Edit Instruction -->
+      <div class="form-group">
+        <div class="section-title">2. Natural-Language Edit</div>
+        <label for="instructionInput">Instruction prompt</label>
+        <textarea id="instructionInput" placeholder="e.g. Update executive summary title on slide 1 and resize the financial table..." aria-required="true"></textarea>
+      </div>
+
+      <!-- 3. Runtime Selector -->
+      <div class="form-group">
+        <label for="runtimeSelect">Agent CLI Runtime</label>
+        <select id="runtimeSelect" aria-label="Select AI runtime">
+          <option value="">Detecting local runtimes...</option>
+        </select>
+      </div>
+
+      <!-- Start Button -->
+      <button class="btn-primary" id="btnSubmit">
+        <span>🚀 Start AI Slide Edit</span>
+      </button>
+
+      <!-- Pipeline Stepper -->
+      <div>
+        <div class="section-title">Pipeline Progress</div>
+        <div class="pipeline-stepper" aria-label="Pipeline Status Stages">
+          <div class="step-item active">
+            <div class="step-circle">1</div>
+            <div class="step-label">Ingest</div>
+          </div>
+          <div class="step-item">
+            <div class="step-circle">2</div>
+            <div class="step-label">Plan</div>
+          </div>
+          <div class="step-item">
+            <div class="step-circle">3</div>
+            <div class="step-label">Execute</div>
+          </div>
+          <div class="step-item">
+            <div class="step-circle">4</div>
+            <div class="step-label">Quality</div>
+          </div>
+          <div class="step-item">
+            <div class="step-circle">5</div>
+            <div class="step-label">Review</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Real-Time Event Logs -->
+      <div>
+        <div class="section-title">Live Event Stream</div>
+        <div class="event-log-container" id="eventLogs" role="log" aria-live="polite">
+          <div class="log-entry">
+            <span class="log-time">[Ready]</span>
+            <span class="log-msg">Workbench initialized. Ready for job.</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Right Main Studio Canvas -->
+    <section class="main-canvas">
+      <!-- Preview Side-by-Side Studio Card -->
+      <div class="preview-card">
+        <div class="preview-header">
+          <div class="section-title" style="margin-bottom: 0;">Interactive Slide Diff Studio</div>
+        </div>
+
+        <div class="preview-split">
+          <!-- Before Pane -->
+          <div class="preview-pane">
+            <div class="pane-label">
+              <span style="color: var(--text-muted);">●</span> Original Slide
+            </div>
+            <div class="slide-frame">
+              <img id="beforeImg" src="" alt="Original Slide Preview" style="display: none;">
+              <div class="empty-placeholder" id="beforePlaceholder">
+                <span>📄 No slide loaded</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- After Pane -->
+          <div class="preview-pane">
+            <div class="pane-label">
+              <span style="color: var(--accent-primary);">●</span> Modified Slide
+            </div>
+            <div class="slide-frame">
+              <img id="afterImg" src="" alt="Modified Slide Preview" style="display: none;">
+              <div class="empty-placeholder" id="afterPlaceholder">
+                <span>⚡ Awaiting edits</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quality Findings & Defect Cards -->
+      <div class="preview-card">
+        <div class="preview-header">
+          <div class="section-title" style="margin-bottom: 0;">Quality Gates & Findings</div>
+        </div>
+        <div class="findings-grid" id="findingsContainer">
+          <div style="color: var(--text-muted); font-size: 0.85rem;">
+            Run a slide edit to view automated structural & visual verification results.
+          </div>
+        </div>
+      </div>
+
+      <!-- Human Review Action Bar -->
+      <div class="action-bar" id="actionBar" style="display: none;">
+        <div>
+          <div style="font-weight: 600; font-size: 0.95rem;">Human Review Required</div>
+          <div style="font-size: 0.8rem; color: var(--text-muted);">Please review the before/after slides and findings above before finalizing.</div>
+        </div>
+        <div class="action-buttons">
+          <button class="btn-danger" id="btnReject">Discard & Reject</button>
+          <button class="btn-warning" id="btnRepair">Request AI Fix</button>
+          <button class="btn-success" id="btnApprove">✓ Approve & Download</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/js/workbench.js"></script>
+</body>
+</html>

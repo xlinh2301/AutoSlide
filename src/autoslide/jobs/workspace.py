@@ -82,6 +82,30 @@ class JobWorkspace:
         return record
 
     @property
+    def input_dir(self) -> Path:
+        return self.root / "input"
+
+    @property
+    def working_dir(self) -> Path:
+        return self.root / "working"
+
+    @property
+    def checkpoints_dir(self) -> Path:
+        return self.root / "checkpoints"
+
+    @property
+    def previews_dir(self) -> Path:
+        return self.root / "previews"
+
+    @property
+    def artifacts_dir(self) -> Path:
+        return self.root / "artifacts"
+
+    @property
+    def logs_dir(self) -> Path:
+        return self.root / "logs"
+
+    @property
     def last_checkpoint_id(self) -> str | None:
         """Return the ID of the most recent checkpoint written in this workspace."""
         return self._last_checkpoint_id

@@ -43,6 +43,22 @@ class PPTXIngestor:
     def __init__(self, default_renderer: BasePreviewRenderer | None = None):
         self.default_renderer = default_renderer or MockPreviewRenderer()
 
+    def parse_deck(self, pptx_path: Path) -> DeckInventory:
+        """Parse deck inventory directly from PPTX path without full workspace ingestion."""
+        if not pptx_path.exists():
+            raise FileNotFoundError(f"PPTX file not found at {pptx_path}")
+        initial_bytes = pptx_path.read_bytes()
+        initial_sha256 = hashlib.sha256(initial_bytes).hexdigest()
+        zf = validate_pptx_package(initial_bytes)
+        try:
+            return self._parse_deck(zf, initial_sha256)
+        finally:
+            zf.close()
+
+    def parse(self, pptx_path: Path) -> DeckInventory:
+        """Alias for parse_deck."""
+        return self.parse_deck(pptx_path)
+
     def ingest(
         self,
         pptx_path: Path,
