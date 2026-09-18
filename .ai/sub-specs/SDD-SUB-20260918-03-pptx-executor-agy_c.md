@@ -2,7 +2,7 @@
 id: SDD-SUB-20260918-03
 title: "Phase 4 PPTX Executor: Deterministic Mutations, Checkpointing, Structural Diff & Safe Rollback"
 author: agy_c
-status: DRAFT
+status: IMPLEMENTED
 main_spec: "[[.ai/specs/ADS-001/requirements.md]]"
 summary: "Execute validated TaskPlans against PPTX packages deterministically with run-level text preservation, geometry updates, structural diff generation, atomic checkpoints, and rollback safety."
 decisions:
@@ -26,7 +26,7 @@ risk_level: LOW
 > [!ABSTRACT] Tóm tắt cho AI
 > **Mục tiêu**: Thực thi các thao tác trong `TaskPlan` đã qua kiểm duyệt (`PolicyGate`) lên file PPTX làm việc một cách tất định (deterministic), bảo toàn định dạng font/màu sắc/layout của các đối tượng không sửa đổi, tạo checkpoint theo từng bước, kiểm định tính toàn vẹn của file xuất ra, sinh diff cấu trúc trước/sau và hỗ trợ rollback an toàn khi phát sinh lỗi.
 > **Quyết định then chốt**: Thao tác trực tiếp trên cây OOXML PresentationML (`xml.etree` + `zipfile`); đối soát fingerprint động; sinh báo cáo diff cấu trúc dạng máy đọc (`StructuralDiff`); lưu trữ checkpoint liên kết vào `JobWorkspace`.
-> **Rủi ro**: #risk/LOW | **Trạng thái**: #status/DRAFT
+> **Rủi ro**: #risk/LOW | **Trạng thái**: #status/IMPLEMENTED
 
 ---
 
@@ -99,14 +99,14 @@ Cung cấp lát cắt thực thi (Phase 4) cho AutoSlide:
 ---
 
 ## 4. Tiêu chí Chấp nhận (Acceptance Criteria)
-- [ ] `PPTXExecutor.execute(...)` áp dụng thành công các operations: `replace_text`, `format_text`, `move_resize_shape`, `duplicate_slide`, `delete_slide`.
-- [ ] `replace_text` giữ nguyên 100% thuộc tính định dạng font, cỡ chữ, in đậm/nghiêng và màu sắc của run gốc.
-- [ ] File template gốc trong `input/` không bị thay đổi (giữ nguyên SHA-256 ban đầu); toàn bộ mutation diễn ra trên bản sao `working/`.
-- [ ] Checkpoint hợp lệ được sinh ra sau mỗi giai đoạn thông qua `JobWorkspace.write_checkpoint(...)`.
-- [ ] File PPTX kết quả vượt qua kiểm định `validate_pptx_package` và mở được dưới dạng zip hợp lệ.
-- [ ] `StructuralDiffEngine` sinh `artifacts/structural_diff.json` phân định chính xác `intended_changes` và `unintended_changes`.
-- [ ] Khi xảy ra lỗi giữa chừng, executor tự động rollback về checkpoint hợp lệ trước đó và ném `MutationRollbackError`.
-- [ ] Toàn bộ test suite (Phase 1 + Phase 2 + Phase 3 + Phase 4) đạt 100% passing rate trên pytest, `compileall` sạch và `sanitizer-engine pre-commit` pass.
+- [x] `PPTXExecutor.execute(...)` áp dụng thành công các operations: `replace_text`, `format_text`, `move_resize_shape`, `duplicate_slide`, `delete_slide`.
+- [x] `replace_text` giữ nguyên 100% thuộc tính định dạng font, cỡ chữ, in đậm/nghiêng và màu sắc của run gốc.
+- [x] File template gốc trong `input/` không bị thay đổi (giữ nguyên SHA-256 ban đầu); toàn bộ mutation diễn ra trên bản sao `working/`.
+- [x] Checkpoint hợp lệ được sinh ra sau mỗi giai đoạn thông qua `JobWorkspace.write_checkpoint(...)`.
+- [x] File PPTX kết quả vượt qua kiểm định `validate_pptx_package` và mở được dưới dạng zip hợp lệ.
+- [x] `StructuralDiffEngine` sinh `artifacts/structural_diff.json` phân định chính xác `intended_changes` và `unintended_changes`.
+- [x] Khi xảy ra lỗi giữa chừng, executor tự động rollback về checkpoint hợp lệ trước đó và ném `MutationRollbackError`.
+- [x] Toàn bộ test suite (Phase 1 + Phase 2 + Phase 3 + Phase 4) đạt 100% passing rate trên pytest, `compileall` sạch và `sanitizer-engine pre-commit` pass.
 
 ---
 
