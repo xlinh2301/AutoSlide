@@ -1,0 +1,162 @@
+{
+  "version": 1,
+  "topic_id": "agent-edit-slide",
+  "title": "Agent Edit Slide",
+  "objective": "Determine a practical local cross-platform architecture that accepts slide templates or sample slides plus natural-language or Docs/Word/Excel requirements, edits and updates data while preserving visual fidelity, and returns a completed slide using agent CLI runtimes without API keys.",
+  "created_at": "2026-09-18T06:10:13.937647+00:00",
+  "updated_at": "2026-09-18T06:20:20.993061+00:00",
+  "nodes": [
+    {
+      "id": "1",
+      "title": "Agent Edit Slide",
+      "hypothesis": "Determine a practical local cross-platform architecture that accepts slide templates or sample slides plus natural-language or Docs/Word/Excel requirements, edits and updates data while preserving visual fidelity, and returns a completed slide using agent CLI runtimes without API keys.",
+      "status": "VALIDATED",
+      "reason": "",
+      "evidence": [
+        ".ai/reports/agent-edit-slide_REPORT.md; .ai/research/agent-edit-slide/RESEARCH_TREE.md"
+      ],
+      "insights": [
+        "Use a structured slide representation linked to native PPTX objects, rendered regions and source provenance; screenshots are verification evidence, not the editable source.",
+        "Use provider-neutral local CLI adapters and reuse user login state; do not collect or store API keys.",
+        "Prefer clone-and-fill plus constrained patch operations, with native object generation only where needed.",
+        "Make render-diff, semantic completeness, provenance and manual approval first-class quality gates."
+      ],
+      "created_at": "2026-09-18T06:10:13.937673+00:00",
+      "updated_at": "2026-09-18T06:13:31.674569+00:00"
+    },
+    {
+      "id": "1.1",
+      "title": "Input and artifact understanding",
+      "hypothesis": "Existing slide decks and office documents can be normalized into a structured intermediate representation for reliable editing.",
+      "status": "VALIDATED",
+      "reason": "",
+      "evidence": [
+        "https://github.com/UIUC-MONET/SLIDEFORGE#readme; https://python-pptx.readthedocs.io/_/downloads/en/stable/pdf/"
+      ],
+      "insights": [
+        "Use a structured slide representation linked to native PPTX objects, rendered regions and source provenance; screenshots are verification evidence, not the editable source."
+      ],
+      "created_at": "2026-09-18T06:10:13.989634+00:00",
+      "updated_at": "2026-09-18T06:12:05.197726+00:00"
+    },
+    {
+      "id": "1.2",
+      "title": "Agent CLI orchestration",
+      "hypothesis": "A local desktop/web app can safely orchestrate Codex, Gemini, Claude and similar CLIs without embedding provider API keys.",
+      "status": "VALIDATED",
+      "reason": "",
+      "evidence": [
+        "https://github.com/openai/codex/blob/main/README.md; https://github.com/google-gemini/gemini-cli/blob/main/docs/get-started/index.md; https://code.claude.com/docs/en/headless"
+      ],
+      "insights": [
+        "Use provider-neutral local CLI adapters and reuse user login state; do not collect or store API keys."
+      ],
+      "created_at": "2026-09-18T06:10:14.034912+00:00",
+      "updated_at": "2026-09-18T06:12:05.242588+00:00"
+    },
+    {
+      "id": "1.3",
+      "title": "Slide editing engines",
+      "hypothesis": "Programmatic PPTX editing plus rendering/vision verification is more reliable than asking an LLM to directly author binary slides.",
+      "status": "VALIDATED",
+      "reason": "",
+      "evidence": [
+        "https://github.com/alfonsograziano/pptx-gen; https://github.com/gitbrent/PptxGenJS; https://github.com/use-agent-os/agent-os/blob/main/src/agentos/skills/bundled/pptx/SKILL.md"
+      ],
+      "insights": [
+        "Prefer clone-and-fill plus constrained patch operations, with native object generation only where needed."
+      ],
+      "created_at": "2026-09-18T06:10:14.078148+00:00",
+      "updated_at": "2026-09-18T06:12:05.299472+00:00"
+    },
+    {
+      "id": "1.4",
+      "title": "Cross-platform local UX",
+      "hypothesis": "A local service with a browser UI and platform-specific CLI adapters can support Linux, macOS and Windows.",
+      "status": "VALIDATED",
+      "reason": "",
+      "evidence": [
+        "https://github.com/openai/codex/blob/main/README.md#quickstart; https://github.com/google-gemini/gemini-cli/blob/main/docs/get-started/index.md"
+      ],
+      "insights": [],
+      "created_at": "2026-09-18T06:10:14.121982+00:00",
+      "updated_at": "2026-09-18T06:12:05.346074+00:00"
+    },
+    {
+      "id": "1.5",
+      "title": "Quality and safety",
+      "hypothesis": "Render-diff, semantic data checks, sandboxing and human approval gates are required for production-quality output.",
+      "status": "VALIDATED",
+      "reason": "",
+      "evidence": [
+        "https://github.com/UIUC-MONET/SLIDEFORGE#the-pipeline-at-a-glance; https://github.com/alfonsograziano/pptx-gen#clone-and-fill"
+      ],
+      "insights": [
+        "Make render-diff, semantic completeness, provenance and manual approval first-class quality gates."
+      ],
+      "created_at": "2026-09-18T06:10:14.164248+00:00",
+      "updated_at": "2026-09-18T06:12:05.395446+00:00"
+    },
+    {
+      "id": "1.1.1",
+      "title": "Screenshot-only representation",
+      "hypothesis": "A screenshot plus OCR is sufficient as the primary editing representation for preserving editable PowerPoint structure.",
+      "status": "PRUNED",
+      "reason": "Screenshot/OCR loses native text boxes, charts, tables, grouping, z-order and editability; use it only as a visual verification signal, not the source of truth.",
+      "evidence": [],
+      "insights": [],
+      "created_at": "2026-09-18T06:12:04.996481+00:00",
+      "updated_at": "2026-09-18T06:12:05.043689+00:00"
+    },
+    {
+      "id": "1.3.1",
+      "title": "Direct LLM binary authoring",
+      "hypothesis": "An LLM can directly manipulate PPTX binaries without a constrained intermediate model and still preserve complex templates.",
+      "status": "PRUNED",
+      "reason": "Open-ended binary mutation has high corruption and layout-drift risk; constrain actions through a slide IR and deterministic patch engine.",
+      "evidence": [],
+      "insights": [],
+      "created_at": "2026-09-18T06:12:05.090015+00:00",
+      "updated_at": "2026-09-18T06:12:05.141121+00:00"
+    },
+    {
+      "id": "1.6",
+      "title": "Paper-derived architecture",
+      "hypothesis": "Combining structured content planning, edit-based reference slides, object-level execution and rendered verification is the strongest approach for template-preserving slide updates.",
+      "status": "VALIDATED",
+      "reason": "",
+      "evidence": [
+        "https://arxiv.org/pdf/2509.11062; https://aclanthology.org/2025.emnlp-main.728.pdf; https://aclanthology.org/2026.findings-acl.166.pdf; https://github.com/UIUC-MONET/SLIDEFORGE"
+      ],
+      "insights": [],
+      "created_at": "2026-09-18T06:20:20.737981+00:00",
+      "updated_at": "2026-09-18T06:20:20.882335+00:00"
+    },
+    {
+      "id": "1.7",
+      "title": "Evaluation and failure boundaries",
+      "hypothesis": "A reliable slide agent must measure instruction fidelity, data correctness, structural preservation, visual quality and refusal quality separately.",
+      "status": "VALIDATED",
+      "reason": "",
+      "evidence": [
+        "https://aclanthology.org/2026.findings-acl.166.pdf; https://github.com/michaelofengenden/PPTArena; https://github.com/microsoft/ppteval"
+      ],
+      "insights": [],
+      "created_at": "2026-09-18T06:20:20.786395+00:00",
+      "updated_at": "2026-09-18T06:20:20.943649+00:00"
+    },
+    {
+      "id": "1.8",
+      "title": "Data-driven template updates",
+      "hypothesis": "User-provided business templates plus external spreadsheet/document facts require provenance-aware grounding and chart/table consistency checks.",
+      "status": "VALIDATED",
+      "reason": "",
+      "evidence": [
+        "https://arxiv.org/abs/2604.17894; https://github.com/XiaoZhou2024/SlideAgent"
+      ],
+      "insights": [],
+      "created_at": "2026-09-18T06:20:20.833445+00:00",
+      "updated_at": "2026-09-18T06:20:20.992977+00:00"
+    }
+  ]
+}
