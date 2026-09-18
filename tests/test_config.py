@@ -7,7 +7,7 @@ from autoslide.config import Settings
 def test_defaults_are_local_and_api_key_free(tmp_path: Path):
     settings = Settings.from_env({"AUTOSLIDE_DATA_ROOT": str(tmp_path)})
     assert settings.data_root == tmp_path
-    assert settings.allowed_runtimes == ("codex", "gemini", "claude")
+    assert settings.allowed_runtimes == ("codex", "gemini", "claude", "antigravity")
     assert not hasattr(settings, "provider_api_key")
 
 

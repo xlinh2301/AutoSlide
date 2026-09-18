@@ -176,3 +176,23 @@ def test_runtimes_endpoint_readiness_and_contract(tmp_path: Path):
     assert unauthed["installed"] is True
     assert unauthed["authenticated"] is False
     assert unauthed["available"] is False
+
+
+def test_default_runtime_registry_endpoint_exposes_all_runtimes(tmp_path: Path):
+    settings = Settings(data_root=tmp_path / "data")
+    app = create_app(settings=settings)
+    test_client = TestClient(app)
+
+    res = test_client.get("/api/v1/runtimes")
+    assert res.status_code == 200
+    runtimes = res.json()
+    names = [r["name"] for r in runtimes]
+    assert "codex" in names
+    assert "gemini" in names
+    assert "claude" in names
+    assert "antigravity" in names
+    for r in runtimes:
+        assert "available" in r
+        assert "installed" in r
+        assert "authenticated" in r
+

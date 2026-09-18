@@ -24,9 +24,13 @@ class BaseRuntimeAdapter(RuntimeAdapter):
         self.process_runner = process_runner or subprocess.Popen
         self.run_cmd = run_cmd or subprocess.run
 
+    def resolve_executable(self) -> str | None:
+        """Resolve executable path from PATH."""
+        return shutil.which(self.executable_name)
+
     def build_argv(self, prompt: str, workspace: Path) -> list[str]:
         """Build safe argument array for CLI execution."""
-        executable = shutil.which(self.executable_name) or self.executable_name
+        executable = self.resolve_executable() or self.executable_name
         return [executable, "run", "--prompt", prompt]
 
     def auth_argv(self, executable: str) -> list[str]:
@@ -35,7 +39,7 @@ class BaseRuntimeAdapter(RuntimeAdapter):
 
     def detect(self) -> RuntimeStatus:
         """Probe the system for binary presence, version, and authentication state."""
-        which_path = shutil.which(self.executable_name)
+        which_path = self.resolve_executable()
         if not which_path:
             return RuntimeStatus(
                 name=self.name,
@@ -198,11 +202,11 @@ class CodexAdapter(BaseRuntimeAdapter):
     executable_name = "codex"
 
     def build_argv(self, prompt: str, workspace: Path) -> list[str]:
-        executable = shutil.which(self.executable_name) or self.executable_name
+        executable = self.resolve_executable() or self.executable_name
         return [executable, "exec", "--prompt", prompt, "--workspace", str(workspace)]
 
     def auth_argv(self, executable: str) -> list[str]:
-        return [executable, "auth", "status"]
+        return [executable, "login", "status"]
 
 
 class GeminiAdapter(BaseRuntimeAdapter):
@@ -212,7 +216,7 @@ class GeminiAdapter(BaseRuntimeAdapter):
     executable_name = "gemini"
 
     def build_argv(self, prompt: str, workspace: Path) -> list[str]:
-        executable = shutil.which(self.executable_name) or self.executable_name
+        executable = self.resolve_executable() or self.executable_name
         return [executable, "run", "--prompt", prompt, "--dir", str(workspace)]
 
     def auth_argv(self, executable: str) -> list[str]:
@@ -226,11 +230,47 @@ class ClaudeAdapter(BaseRuntimeAdapter):
     executable_name = "claude"
 
     def build_argv(self, prompt: str, workspace: Path) -> list[str]:
-        executable = shutil.which(self.executable_name) or self.executable_name
+        executable = self.resolve_executable() or self.executable_name
         return [executable, "--prompt", prompt, "--cwd", str(workspace)]
 
     def auth_argv(self, executable: str) -> list[str]:
         return [executable, "auth", "status"]
+
+
+class AntigravityAdapter(BaseRuntimeAdapter):
+    """Runtime adapter for Google Antigravity CLI."""
+
+    name = "antigravity"
+    candidate_executables: tuple[str, ...] = ("agy_c", "agy", "antigravity")
+    executable_name = "agy_c"
+
+    def resolve_executable(self) -> str | None:
+        """Find the highest-priority installed executable wrapper."""
+        for candidate in self.candidate_executables:
+            path = shutil.which(candidate)
+            if path:
+                return path
+        return None
+
+    def build_argv(self, prompt: str, workspace: Path) -> list[str]:
+        executable = self.resolve_executable() or self.candidate_executables[0]
+        return [executable, "--print", prompt, "--add-dir", str(workspace)]
+
+    def auth_argv(self, executable: str) -> list[str]:
+        return [executable, "models"]
+
+    def detect(self) -> RuntimeStatus:
+        which_path = self.resolve_executable()
+        if not which_path:
+            return RuntimeStatus(
+                name=self.name,
+                installed=False,
+                version=None,
+                authenticated=False,
+                executable=None,
+                reason=f"None of {self.candidate_executables} found in PATH",
+            )
+        return super().detect()
 
 
 class FakeRuntimeAdapter(BaseRuntimeAdapter):

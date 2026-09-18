@@ -129,3 +129,82 @@ def test_adapter_nonzero_exit_emits_error_event(tmp_path: Path):
     assert "RUNTIME_ERROR" in event_types
     err_event = next(e for e in events if e.event_type == "RUNTIME_ERROR")
     assert "Fatal syntax error" in err_event.payload.get("message", "")
+
+
+def test_codex_auth_argv_uses_login_status():
+    adapter = CodexAdapter()
+    assert adapter.auth_argv("/usr/bin/codex") == ["/usr/bin/codex", "login", "status"]
+
+
+def test_codex_detection_probe(monkeypatch):
+    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/codex" if name == "codex" else None)
+
+    def mock_run(argv, **kwargs):
+        if "--version" in argv:
+            return subprocess.CompletedProcess(argv, returncode=0, stdout="codex-cli 0.155.0\n", stderr="")
+        if "login" in argv and "status" in argv:
+            return subprocess.CompletedProcess(argv, returncode=0, stdout="Logged in using ChatGPT\n", stderr="")
+        return subprocess.CompletedProcess(argv, returncode=1, stdout="", stderr="Error")
+
+    adapter = CodexAdapter(run_cmd=mock_run)
+    status = adapter.detect()
+    assert status.installed is True
+    assert status.authenticated is True
+    assert status.available is True
+    assert status.version == "codex-cli 0.155.0"
+    assert status.executable == "/usr/bin/codex"
+
+
+def test_antigravity_adapter_resolution_priority(monkeypatch, tmp_path: Path):
+    from autoslide.runtime.adapters import AntigravityAdapter
+
+    # Case 1: agy_c is present -> selects agy_c
+    monkeypatch.setattr("shutil.which", lambda name: f"/bin/{name}" if name in ("agy_c", "agy", "antigravity") else None)
+    adapter1 = AntigravityAdapter()
+    assert adapter1.resolve_executable() == "/bin/agy_c"
+    argv1 = adapter1.build_argv("Prompt 1", tmp_path)
+    assert argv1 == ["/bin/agy_c", "--print", "Prompt 1", "--add-dir", str(tmp_path)]
+    assert adapter1.auth_argv("/bin/agy_c") == ["/bin/agy_c", "models"]
+
+    # Case 2: only agy is present -> selects agy
+    monkeypatch.setattr("shutil.which", lambda name: f"/bin/{name}" if name in ("agy", "antigravity") else None)
+    adapter2 = AntigravityAdapter()
+    assert adapter2.resolve_executable() == "/bin/agy"
+    argv2 = adapter2.build_argv("Prompt 2", tmp_path)
+    assert argv2 == ["/bin/agy", "--print", "Prompt 2", "--add-dir", str(tmp_path)]
+
+    # Case 3: only antigravity is present -> selects antigravity
+    monkeypatch.setattr("shutil.which", lambda name: f"/bin/{name}" if name == "antigravity" else None)
+    adapter3 = AntigravityAdapter()
+    assert adapter3.resolve_executable() == "/bin/antigravity"
+
+    # Case 4: none present -> None
+    monkeypatch.setattr("shutil.which", lambda name: None)
+    adapter4 = AntigravityAdapter()
+    assert adapter4.resolve_executable() is None
+    status4 = adapter4.detect()
+    assert status4.installed is False
+    assert status4.authenticated is False
+    assert status4.available is False
+
+
+def test_antigravity_detection_success(monkeypatch):
+    from autoslide.runtime.adapters import AntigravityAdapter
+
+    monkeypatch.setattr("shutil.which", lambda name: "/home/user/.local/bin/agy_c" if name == "agy_c" else None)
+
+    def mock_run(argv, **kwargs):
+        if "--version" in argv:
+            return subprocess.CompletedProcess(argv, returncode=0, stdout="1.2.6\n", stderr="")
+        if "models" in argv:
+            return subprocess.CompletedProcess(argv, returncode=0, stdout="gemini-3.8-flash-high\n", stderr="")
+        return subprocess.CompletedProcess(argv, returncode=1, stdout="", stderr="Fail")
+
+    adapter = AntigravityAdapter(run_cmd=mock_run)
+    status = adapter.detect()
+    assert status.installed is True
+    assert status.authenticated is True
+    assert status.available is True
+    assert status.version == "1.2.6"
+    assert status.executable == "/home/user/.local/bin/agy_c"
+

@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from autoslide.runtime.adapters import ClaudeAdapter, CodexAdapter, GeminiAdapter
+from autoslide.runtime.adapters import (
+    AntigravityAdapter,
+    ClaudeAdapter,
+    CodexAdapter,
+    GeminiAdapter,
+)
 from autoslide.runtime.base import RuntimeAdapter
 from autoslide.runtime.models import RuntimeStatus
 
@@ -16,6 +21,7 @@ class RuntimeRegistry:
                 CodexAdapter(),
                 GeminiAdapter(),
                 ClaudeAdapter(),
+                AntigravityAdapter(),
             ]
             self._adapters = {a.name: a for a in default_adapters}
         else:

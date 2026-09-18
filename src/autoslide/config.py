@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 DEFAULT_DATA_ROOT = Path("/tmp/autoslide")
 DEFAULT_MAX_JOB_SIZE_BYTES = 50 * 1024 * 1024  # 50 MB
 DEFAULT_JOB_TIMEOUT_SECONDS = 300  # 5 minutes
-VALID_RUNTIMES: tuple[str, ...] = ("codex", "gemini", "claude")
+VALID_RUNTIMES: tuple[str, ...] = ("codex", "gemini", "claude", "antigravity")
 
 
 class Settings(BaseModel):

@@ -1,7 +1,12 @@
 from pathlib import Path
 import pytest
 
-from autoslide.runtime.adapters import ClaudeAdapter, CodexAdapter, GeminiAdapter
+from autoslide.runtime.adapters import (
+    AntigravityAdapter,
+    ClaudeAdapter,
+    CodexAdapter,
+    GeminiAdapter,
+)
 from autoslide.runtime.discovery import RuntimeRegistry
 from autoslide.runtime.models import RuntimeStatus
 
@@ -34,6 +39,7 @@ def test_registry_detect_all_returns_supported_runtimes(monkeypatch):
     assert "codex" in names
     assert "gemini" in names
     assert "claude" in names
+    assert "antigravity" in names
     assert all(not s.installed for s in statuses)
 
 
@@ -42,6 +48,7 @@ def test_registry_get_returns_correct_adapter():
     assert isinstance(registry.get("codex"), CodexAdapter)
     assert isinstance(registry.get("gemini"), GeminiAdapter)
     assert isinstance(registry.get("claude"), ClaudeAdapter)
+    assert isinstance(registry.get("antigravity"), AntigravityAdapter)
 
     with pytest.raises(KeyError, match="unknown"):
         registry.get("unknown")

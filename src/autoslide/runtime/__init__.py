@@ -1,6 +1,7 @@
 """Runtime models, adapters, and discovery package for AutoSlide."""
 
 from autoslide.runtime.adapters import (
+    AntigravityAdapter,
     BaseRuntimeAdapter,
     ClaudeAdapter,
     CodexAdapter,
@@ -13,6 +14,7 @@ from autoslide.runtime.models import AgentEvent, RuntimeStatus
 
 __all__ = [
     "AgentEvent",
+    "AntigravityAdapter",
     "BaseRuntimeAdapter",
     "ClaudeAdapter",
     "CodexAdapter",
