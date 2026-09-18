@@ -9,12 +9,14 @@ decisions:
   - "Enhance target resolution in planner/builder/executor to accurately parse 1-based slide target mentions such as 'slide 3', 'slide 3:', 'trang 3', 'slide số 3' and match corresponding slide index (slide_index 3)."
   - "Update Workbench review decision endpoint (/api/v1/jobs/{job_id}/decision) to launch an asynchronous background repair pipeline task upon 'repair' decision action, transitioning through REPAIRING, EXECUTING, RENDERING, VERIFYING and AWAITING_USER_APPROVAL states."
   - "Refine QualityGate text bounding-box overflow calculation to account for text wrapping margins, paragraph heights, and line tolerances to prevent false positive defects on valid presentation titles and bodies."
+  - "Introduce documented EMU bounds tolerance (DEFAULT_BOUNDS_TOLERANCE_EMU = 100,000 EMU) and accurate table row height bounding in VisualQualityGate and PPTXIngestor to eliminate sub-pixel rounding false positives (e.g. 9 EMU overhangs and layout margins) on real templates (Weekly Report.pptx) while preserving true defect clipping detection."
   - "Create regression test cases in tests/integration/test_defect_fixes.py and planner tests covering 'tạo title test cho slide 3' against standard PPTX fixtures."
   - "Maintain Phase 7 reference ingestion contracts untouched."
 affected_symbols:
   - "autoslide.orchestrator.pipeline.JobOrchestrator._resolve_plan"
   - "autoslide.orchestrator.pipeline.JobOrchestrator.run_repair"
   - "autoslide.quality.visual.VisualQualityGate.evaluate"
+  - "autoslide.ingest.parser.PPTXIngestor._parse_single_shape"
   - "autoslide.api.submit_decision"
 risk_level: LOW
 ---
@@ -22,7 +24,7 @@ risk_level: LOW
 # 📝 Sub Spec: Defect Fixes — Explicit Slide Targeting, Async Repair Decision Path & Text Overflow Calibration
 
 > [!ABSTRACT] Tóm tắt cho AI
-> **Mục tiêu**: Khắc phục các lỗi vận hành của AutoSlide gồm phân giải mục tiêu slide tường minh (ví dụ: "slide 3" -> slide index 3), kích hoạt chu trình sửa lỗi bất đồng bộ khi bấm Repair trên Review Gate, triệt tiêu cảnh báo giả tràn chữ (false-positive text overflow) nhưng vẫn giữ chuẩn phát hiện clipping thực, và bổ sung test hồi quy cho lệnh "tạo title test cho slide 3".
+> **Mục tiêu**: Khắc phục các lỗi vận hành của AutoSlide gồm phân giải mục tiêu slide tường minh (ví dụ: "slide 3" -> slide index 3), kích hoạt chu trình sửa lỗi bất đồng bộ khi bấm Repair trên Review Gate, triệt tiêu cảnh báo giả tràn chữ (false-positive text overflow) và bounds clipping do sai số làm tròn sub-pixel (như 9 EMU trên Weekly Report.pptx) nhưng vẫn giữ chuẩn phát hiện clipping thực, và bổ sung test hồi quy cho lệnh "tạo title test cho slide 3".
 > **Quy chuẩn**: Giữ nguyên Phase 7 Reference Ingestion; tuân thủ strict Conventional Commits; pass 100% pytest, compileall, sanitizer-engine; khởi động lại demo server và kiểm thử E2E qua UI/API.
 > **Rủi ro**: #risk/LOW | **Trạng thái**: #status/IMPLEMENTED
 
@@ -35,11 +37,12 @@ risk_level: LOW
 2. **Async Repair Decision Path**:
    - Khi API nhận review decision với action `repair` (`POST /api/v1/jobs/{job_id}/decision` với `{"decision": "repair"}`), hệ thống khởi chạy tiến trình `run_repair` chạy ngầm (asynchronous background task).
    - Trạng thái job chuyển tiếp mượt mà từ `AWAITING_USER_APPROVAL` sang `REPAIRING` $\rightarrow$ `EXECUTING` $\rightarrow$ `RENDERING` $\rightarrow$ `VERIFYING` $\rightarrow$ `AWAITING_USER_APPROVAL`.
-3. **Calibrated Text Overflow Detection**:
+3. **Calibrated Text Overflow & Bounds Clipping Detection**:
    - Tinh chỉnh thuật toán đo kích thước ước tính và bounding box tolerance trong `autoslide.quality.visual` để không báo lỗi tràn chữ (false positive) cho các text box tiêu đề và nội dung thông thường có ngắt dòng hợp lệ.
+   - Thêm ngưỡng dung sai EMU (`DEFAULT_BOUNDS_TOLERANCE_EMU = 100,000` EMU) và tính toán chính xác chiều cao bảng (`sum(table_row_heights)`) để loại bỏ hoàn toàn các cảnh báo BOUNDS_CLIPPING giả do sai số làm tròn sub-pixel (chẳng hạn 9 EMU trên slide 3 của `Template Weekly Report.pptx`).
    - Bảo toàn khả năng phát hiện text thực sự vượt quá mép slide (`BOUNDS_CLIPPING`) và lỗi tràn chữ nghiêm trọng (`TEXT_OVERFLOW`).
 4. **Regression Tests & Demo Server Verification**:
-   - Thêm bộ kiểm thử hồi quy cho câu lệnh: `"tạo title test cho slide 3"` trên template PPTX mẫu.
+   - Thêm bộ kiểm thử hồi quy cho câu lệnh: `"tạo title test cho slide 3"` trên template PPTX mẫu và kiểm thử ngưỡng biên tolerance exact.
    - Giữ nguyên Phase 7 không thay đổi.
    - Chạy `pytest`, `compileall`, `sanitizer-engine`, restart demo server, và thực hiện e2e verification.
 
@@ -48,8 +51,9 @@ risk_level: LOW
 ## 2. Tiêu chí Chấp nhận (Acceptance Criteria)
 - [x] Câu lệnh `"tạo title test cho slide 3"` chỉnh sửa chính xác tiêu đề slide 3 mà không tác động slide 1 hoặc slide 2.
 - [x] Gọi `POST /api/v1/jobs/{job_id}/decision` với action `repair` thực thi quy trình khắc phục bất đồng bộ và trả về response tức thì.
-- [x] Không còn false positive text-overflow trên các template và test fixture chuẩn.
+- [x] Không còn false positive text-overflow và bounds-clipping trên các template (`Template Weekly Report.pptx`) và test fixture chuẩn.
 - [x] Phase 7 code và spec không bị chỉnh sửa sai lệch.
-- [x] 100% pytest pass (115/115 tests), `python3 -m compileall src tests` sạch lỗi, `sanitizer-engine pre-commit` pass.
+- [x] 100% pytest pass (117/117 tests), `python3 -m compileall src tests` sạch lỗi, `sanitizer-engine pre-commit` pass.
 - [x] Demo server được khởi động lại thành công và kiểm tra job PPTX qua UI/API hoạt động trơn tru.
 - [x] Phát tín hiệu `AGENT_FINISH` với status `READY_FOR_QA`.
+

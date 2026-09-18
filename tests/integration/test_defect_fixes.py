@@ -166,3 +166,70 @@ def test_text_overflow_calibration_avoids_false_positives(tmp_path: Path):
     ]
     assert len(real_clippings) >= 1
     assert real_clippings[0].shape_name == "Offscreen Shape"
+
+
+def test_weekly_report_bounds_tolerance_and_async_repair(tmp_path: Path):
+    """Verify full template job with instruction 'tao title test cho slide 3' reaches PASSED
+    without BOUNDS_CLIPPING false positives, and async repair completes with PASSED verdict.
+    """
+    settings = Settings(data_root=tmp_path / "data")
+    app = create_app(settings=settings)
+    client = TestClient(app)
+
+    # Use template weekly report if available, else multi-slide fixture
+    weekly_template = Path("/tmp/autoslide/jobs/job_59b5d3311ded/input/Template Weekly Report.pptx")
+    if weekly_template.exists():
+        pptx_bytes = weekly_template.read_bytes()
+    else:
+        pptx_bytes = create_complex_multi_slide_pptx()
+
+    res = client.post(
+        "/api/v1/jobs",
+        files={"template": ("Template Weekly Report.pptx", pptx_bytes, "application/vnd.openxmlformats-officedocument.presentationml.presentation")},
+        data={"instruction": "tạo title test cho slide 3"},
+    )
+    assert res.status_code == 202
+    job_id = res.json()["job_id"]
+
+    # Poll until pipeline reaches AWAITING_USER_APPROVAL
+    for _ in range(100):
+        get_res = client.get(f"/api/v1/jobs/{job_id}")
+        if get_res.json()["state"] == "AWAITING_USER_APPROVAL":
+            break
+        time.sleep(0.1)
+
+    assert client.get(f"/api/v1/jobs/{job_id}").json()["state"] == "AWAITING_USER_APPROVAL"
+
+    # Verify initial quality report has 0 BOUNDS_CLIPPING errors and reaches PASSED
+    quality_res = client.get(f"/api/v1/jobs/{job_id}/artifacts/quality_report.json")
+    assert quality_res.status_code == 200
+    quality_data = quality_res.json()
+    clipping_findings = [
+        f for f in quality_data["visual_result"]["findings"]
+        if f["category"] == "BOUNDS_CLIPPING" and f["severity"] in ("CRITICAL", "ERROR")
+    ]
+    assert len(clipping_findings) == 0
+    assert quality_data["overall_verdict"] == "PASSED"
+
+    # Trigger async Repair decision
+    repair_res = client.post(
+        f"/api/v1/jobs/{job_id}/decision",
+        json={"decision": "repair", "feedback": "Đổi title slide 3 thành 'Weekly Test Slide 3'"},
+    )
+    assert repair_res.status_code == 200
+
+    # Poll until background repair completes back to AWAITING_USER_APPROVAL
+    for _ in range(100):
+        get_res = client.get(f"/api/v1/jobs/{job_id}")
+        if get_res.json()["state"] == "AWAITING_USER_APPROVAL":
+            break
+        time.sleep(0.1)
+
+    final_job = client.get(f"/api/v1/jobs/{job_id}").json()
+    assert final_job["state"] == "AWAITING_USER_APPROVAL"
+
+    final_quality_res = client.get(f"/api/v1/jobs/{job_id}/artifacts/quality_report.json")
+    assert final_quality_res.status_code == 200
+    final_quality = final_quality_res.json()
+    assert final_quality["overall_verdict"] == "PASSED"
+

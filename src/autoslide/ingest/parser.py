@@ -245,7 +245,13 @@ class PPTXIngestor:
         if tbl_elem is not None:
             shape_type = "tbl"
             table_data = []
+            table_row_heights: list[int] = []
             for tr in tbl_elem.findall("a:tr", NS):
+                if "h" in tr.attrib:
+                    try:
+                        table_row_heights.append(int(tr.attrib["h"]))
+                    except ValueError:
+                        pass
                 row_texts: list[str] = []
                 for tc in tr.findall("a:tc", NS):
                     cell_text_runs: list[str] = []
@@ -254,6 +260,8 @@ class PPTXIngestor:
                             cell_text_runs.append(t.text)
                     row_texts.append("".join(cell_text_runs))
                 table_data.append(row_texts)
+            if table_row_heights:
+                bounds.cy = sum(table_row_heights)
 
         # 4. Text Runs & Raw Text
         text_runs: list[TextRunInfo] = []

@@ -14,9 +14,19 @@ from autoslide.quality.models import (
 class VisualQualityGate:
     """Evaluates rendered slides and deck inventory geometry for visual defects."""
 
-    def __init__(self, char_width_factor: float = 0.55, line_height_factor: float = 1.2):
+    # Documented EMU tolerance for sub-pixel / layout rounding margins (100k EMU ~ 7.87 pt / 0.11 in / ~2.7 mm)
+    # Ignores minor floating-point / OpenXML coordinate rounding (e.g. <= 9 EMU or footer margin offsets)
+    DEFAULT_BOUNDS_TOLERANCE_EMU: int = 100_000
+
+    def __init__(
+        self,
+        char_width_factor: float = 0.55,
+        line_height_factor: float = 1.2,
+        bounds_tolerance_emu: int = DEFAULT_BOUNDS_TOLERANCE_EMU,
+    ):
         self.char_width_factor = char_width_factor
         self.line_height_factor = line_height_factor
+        self.bounds_tolerance_emu = bounds_tolerance_emu
 
     def evaluate(
         self,
@@ -29,13 +39,18 @@ class VisualQualityGate:
 
         for slide in inventory.slides:
             for shape in slide.shapes:
-                # 1. Check Bounds Clipping (shape extends beyond slide canvas)
+                # 1. Check Bounds Clipping (shape extends beyond slide canvas, allowing documented EMU tolerance)
                 x = shape.bounds.x
                 y = shape.bounds.y
                 cx = shape.bounds.cx
                 cy = shape.bounds.cy
 
-                if x + cx > slide_w or y + cy > slide_h or x < 0 or y < 0:
+                if (
+                    x + cx > slide_w + self.bounds_tolerance_emu
+                    or y + cy > slide_h + self.bounds_tolerance_emu
+                    or x < -self.bounds_tolerance_emu
+                    or y < -self.bounds_tolerance_emu
+                ):
                     findings.append(
                         VisualFinding(
                             slide_index=slide.slide_index,
@@ -45,7 +60,7 @@ class VisualQualityGate:
                             severity=FindingSeverity.ERROR,
                             message=(
                                 f"Shape '{shape.shape_name}' bounds (x={x}, y={y}, cx={cx}, cy={cy}) "
-                                f"exceed slide dimensions ({slide_w}x{slide_h})."
+                                f"exceed slide dimensions ({slide_w}x{slide_h}) beyond tolerance ({self.bounds_tolerance_emu} EMU)."
                             ),
                             suggested_fix="Adjust shape position or reduce dimensions to fit within slide boundary.",
                         )

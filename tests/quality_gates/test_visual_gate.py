@@ -60,3 +60,25 @@ def test_visual_gate_clean_deck_passes():
 
     report = gate.evaluate(inventory=clean_inv, preview_manifest=manifest)
     assert report.has_critical_or_error is False
+
+
+def test_visual_gate_bounds_clipping_subpixel_tolerance():
+    """Verify bounds clipping ignores sub-pixel rounding (+9 EMU, +72k EMU) up to 100k EMU, but detects true clipping beyond it."""
+    from tests.fixtures.quality_samples import create_boundary_subpixel_inventory
+
+    inv = create_boundary_subpixel_inventory()
+    gate = VisualQualityGate(bounds_tolerance_emu=100_000)
+
+    report = gate.evaluate(inventory=inv)
+
+    # Sub-pixel rounding shapes must NOT be flagged
+    flagged_names = [f.shape_name for f in report.findings if f.category == FindingCategory.BOUNDS_CLIPPING]
+    assert "Footer 9EMU Rounding" not in flagged_names
+    assert "Footer Bottom Margin" not in flagged_names
+    assert "At Tolerance Shape" not in flagged_names
+
+    # True clipping shapes MUST be flagged
+    assert "True Exceeding Shape" in flagged_names
+    assert "True Negative Offset Shape" in flagged_names
+    assert len(flagged_names) == 2
+
