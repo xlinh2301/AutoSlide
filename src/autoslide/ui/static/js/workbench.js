@@ -1,11 +1,27 @@
 /**
  * AutoSlide Local Workbench Client JS — Vanilla ES6, Zero External Dependencies
+ * Implements: Edit Scope (Current Slide, Region, All Slides), Click-Drag Region Selection,
+ * Interactive Slide Diff Studio Navigator, and Changed-Region Highlight Overlays.
  */
 
 (function () {
   let currentJobId = null;
   let pollingInterval = null;
   let selectedFile = null;
+  let previewDiffData = null;
+  let activeSlideIndex = 1;
+
+  // Scope State
+  let scopeState = {
+    kind: "slide", // "slide", "region", "deck"
+    slide_index: 1,
+    region: null, // { x, y, width, height } normalized to [0, 1]
+  };
+
+  // Drag selection state
+  let isDragging = false;
+  let dragStartX = 0;
+  let dragStartY = 0;
 
   // DOM Elements
   const dropzone = document.getElementById("dropzone");
@@ -27,10 +43,27 @@
   const btnReject = document.getElementById("btnReject");
   const btnRepair = document.getElementById("btnRepair");
 
+  // Scope & Diff Elements
+  const scopePillSlide = document.getElementById("scopePillSlide");
+  const scopePillRegion = document.getElementById("scopePillRegion");
+  const scopePillDeck = document.getElementById("scopePillDeck");
+  const scopeSlideSelect = document.getElementById("scopeSlideSelect");
+  const slideSelectRow = document.getElementById("slideSelectRow");
+  const regionBadge = document.getElementById("regionBadge");
+  const regionCoordsLabel = document.getElementById("regionCoordsLabel");
+  const btnClearRegion = document.getElementById("btnClearRegion");
+  const previewNavigator = document.getElementById("previewNavigator");
+  const navPills = document.getElementById("navPills");
+  const selectionOverlayCanvas = document.getElementById("selectionOverlayCanvas");
+  const selectionRect = document.getElementById("selectionRect");
+  const highlightOverlayLayer = document.getElementById("highlightOverlayLayer");
+  const diffBadge = document.getElementById("diffBadge");
+
   // Init
   window.addEventListener("DOMContentLoaded", () => {
     initRuntimes();
     setupEventListeners();
+    setupRegionSelection();
   });
 
   async function initRuntimes() {
@@ -88,6 +121,31 @@
       }
     });
 
+    // Scope Selection Pills
+    if (scopePillSlide) {
+      scopePillSlide.addEventListener("click", () => setScopeKind("slide"));
+    }
+    if (scopePillRegion) {
+      scopePillRegion.addEventListener("click", () => setScopeKind("region"));
+    }
+    if (scopePillDeck) {
+      scopePillDeck.addEventListener("click", () => setScopeKind("deck"));
+    }
+
+    if (scopeSlideSelect) {
+      scopeSlideSelect.addEventListener("change", (e) => {
+        scopeState.slide_index = parseInt(e.target.value, 10) || 1;
+        activeSlideIndex = scopeState.slide_index;
+        if (previewDiffData) {
+          renderSlideDiff(activeSlideIndex);
+        }
+      });
+    }
+
+    if (btnClearRegion) {
+      btnClearRegion.addEventListener("click", clearRegionSelection);
+    }
+
     // Submit Job
     btnSubmit.addEventListener("click", submitJob);
 
@@ -95,6 +153,103 @@
     if (btnApprove) btnApprove.addEventListener("click", () => submitDecision("approve"));
     if (btnReject) btnReject.addEventListener("click", () => submitDecision("reject"));
     if (btnRepair) btnRepair.addEventListener("click", () => submitDecision("repair"));
+  }
+
+  function setScopeKind(kind) {
+    scopeState.kind = kind;
+    [scopePillSlide, scopePillRegion, scopePillDeck].forEach((pill) => {
+      if (pill) pill.classList.remove("active");
+    });
+
+    if (kind === "slide") {
+      if (scopePillSlide) scopePillSlide.classList.add("active");
+      if (slideSelectRow) slideSelectRow.style.display = "flex";
+      if (regionBadge) regionBadge.style.display = "none";
+    } else if (kind === "region") {
+      if (scopePillRegion) scopePillRegion.classList.add("active");
+      if (slideSelectRow) slideSelectRow.style.display = "flex";
+      if (regionBadge) regionBadge.style.display = "flex";
+    } else if (kind === "deck") {
+      if (scopePillDeck) scopePillDeck.classList.add("active");
+      if (slideSelectRow) slideSelectRow.style.display = "none";
+      if (regionBadge) regionBadge.style.display = "none";
+    }
+  }
+
+  function clearRegionSelection() {
+    scopeState.region = null;
+    if (selectionRect) selectionRect.style.display = "none";
+    if (regionBadge) regionBadge.style.display = "none";
+    setScopeKind("slide");
+  }
+
+  function setupRegionSelection() {
+    if (!selectionOverlayCanvas) return;
+
+    selectionOverlayCanvas.addEventListener("mousedown", (e) => {
+      const rect = selectionOverlayCanvas.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
+
+      isDragging = true;
+      dragStartX = e.clientX - rect.left;
+      dragStartY = e.clientY - rect.top;
+
+      selectionRect.style.left = `${dragStartX}px`;
+      selectionRect.style.top = `${dragStartY}px`;
+      selectionRect.style.width = "0px";
+      selectionRect.style.height = "0px";
+      selectionRect.style.display = "block";
+    });
+
+    window.addEventListener("mousemove", (e) => {
+      if (!isDragging || !selectionOverlayCanvas) return;
+      const rect = selectionOverlayCanvas.getBoundingClientRect();
+      const currentX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+      const currentY = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
+
+      const boxX = Math.min(dragStartX, currentX);
+      const boxY = Math.min(dragStartY, currentY);
+      const boxW = Math.abs(currentX - dragStartX);
+      const boxH = Math.abs(currentY - dragStartY);
+
+      selectionRect.style.left = `${boxX}px`;
+      selectionRect.style.top = `${boxY}px`;
+      selectionRect.style.width = `${boxW}px`;
+      selectionRect.style.height = `${boxH}px`;
+    });
+
+    window.addEventListener("mouseup", (e) => {
+      if (!isDragging || !selectionOverlayCanvas) return;
+      isDragging = false;
+
+      const rect = selectionOverlayCanvas.getBoundingClientRect();
+      const currentX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+      const currentY = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
+
+      const boxX = Math.min(dragStartX, currentX);
+      const boxY = Math.min(dragStartY, currentY);
+      const boxW = Math.abs(currentX - dragStartX);
+      const boxH = Math.abs(currentY - dragStartY);
+
+      // Only accept selection if width and height are significant (> 10px)
+      if (boxW > 10 && boxH > 10 && rect.width > 0 && rect.height > 0) {
+        const normX = Math.max(0.0, Math.min(1.0, +(boxX / rect.width).toFixed(4)));
+        const normY = Math.max(0.0, Math.min(1.0, +(boxY / rect.height).toFixed(4)));
+        const normW = Math.max(0.01, Math.min(1.0 - normX, +(boxW / rect.width).toFixed(4)));
+        const normH = Math.max(0.01, Math.min(1.0 - normY, +(boxH / rect.height).toFixed(4)));
+
+        scopeState.region = { x: normX, y: normY, width: normW, height: normH };
+        scopeState.slide_index = activeSlideIndex;
+
+        setScopeKind("region");
+        if (regionCoordsLabel) {
+          regionCoordsLabel.textContent = `Region: [${(normX * 100).toFixed(0)}%, ${(normY * 100).toFixed(0)}% • ${(normW * 100).toFixed(0)}%×${(normH * 100).toFixed(0)}%]`;
+        }
+        if (regionBadge) regionBadge.style.display = "flex";
+      } else {
+        selectionRect.style.display = "none";
+      }
+    });
   }
 
   function handleFileSelect(file) {
@@ -128,6 +283,14 @@
       formData.append("runtime", runtimeSelect.value);
     }
 
+    // Pass structured edit scope
+    const scopePayload = {
+      kind: scopeState.kind,
+      slide_index: scopeState.slide_index || activeSlideIndex,
+      region: scopeState.kind === "region" ? scopeState.region : null,
+    };
+    formData.append("scope", JSON.stringify(scopePayload));
+
     try {
       const res = await fetch("/api/v1/jobs", {
         method: "POST",
@@ -141,14 +304,14 @@
 
       const data = await res.json();
       currentJobId = data.job_id;
-      appendLog("System", `Job created: ${currentJobId}`);
+      appendLog("System", `Job created: ${currentJobId} (scope: ${scopeState.kind})`);
       updateStepper("INGESTING");
 
       startPolling(currentJobId);
     } catch (e) {
       alert(`Error creating job: ${e.message}`);
       btnSubmit.disabled = false;
-      btnSubmit.textContent = "Start AI Slide Edit";
+      btnSubmit.textContent = "🚀 Start AI Slide Edit";
     }
   }
 
@@ -220,19 +383,23 @@
   async function showReviewState(jobId) {
     actionBar.style.display = "flex";
     btnSubmit.disabled = false;
-    btnSubmit.textContent = "Start AI Slide Edit";
+    btnSubmit.textContent = "🚀 Start AI Slide Edit";
 
-    // Load previews
+    // Load preview diff pairs & metadata
     try {
-      beforeImg.src = `/api/v1/jobs/${jobId}/artifacts/slide_001_before.png`;
-      beforeImg.style.display = "block";
-      beforePlaceholder.style.display = "none";
-
-      afterImg.src = `/api/v1/jobs/${jobId}/artifacts/slide_001_after.png`;
-      afterImg.style.display = "block";
-      afterPlaceholder.style.display = "none";
+      const diffRes = await fetch(`/api/v1/jobs/${jobId}/diff`);
+      if (diffRes.ok) {
+        previewDiffData = await diffRes.json();
+        buildSlideNavigator(previewDiffData);
+        populateSlideSelector(previewDiffData.total_slides);
+        renderSlideDiff(activeSlideIndex);
+      } else {
+        // Fallback to slide 1 direct artifacts
+        loadFallbackPreviews(jobId);
+      }
     } catch (e) {
-      console.warn("Preview load fallback:", e);
+      console.warn("Diff load fallback:", e);
+      loadFallbackPreviews(jobId);
     }
 
     // Load quality findings
@@ -245,6 +412,100 @@
     } catch (e) {
       console.warn("Findings load fallback:", e);
     }
+  }
+
+  function buildSlideNavigator(diffData) {
+    if (!previewNavigator || !navPills) return;
+    navPills.innerHTML = "";
+
+    if (!diffData || !diffData.slides || diffData.slides.length === 0) {
+      previewNavigator.style.display = "none";
+      return;
+    }
+
+    previewNavigator.style.display = "flex";
+    diffData.slides.forEach((spd) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = `nav-pill-btn ${spd.slide_index === activeSlideIndex ? "active" : ""} ${spd.status === "modified" ? "modified" : ""}`;
+      btn.textContent = `Slide ${spd.slide_index}`;
+      btn.addEventListener("click", () => {
+        activeSlideIndex = spd.slide_index;
+        scopeState.slide_index = activeSlideIndex;
+        if (scopeSlideSelect) scopeSlideSelect.value = String(activeSlideIndex);
+        document.querySelectorAll(".nav-pill-btn").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        renderSlideDiff(activeSlideIndex);
+      });
+      navPills.appendChild(btn);
+    });
+  }
+
+  function populateSlideSelector(totalSlides) {
+    if (!scopeSlideSelect) return;
+    scopeSlideSelect.innerHTML = "";
+    for (let i = 1; i <= totalSlides; i++) {
+      const opt = document.createElement("option");
+      opt.value = String(i);
+      opt.textContent = `Slide ${i}`;
+      if (i === activeSlideIndex) opt.selected = true;
+      scopeSlideSelect.appendChild(opt);
+    }
+  }
+
+  function renderSlideDiff(slideIndex) {
+    if (!previewDiffData || !previewDiffData.slides) return;
+    const spd = previewDiffData.slides.find((s) => s.slide_index === slideIndex) || previewDiffData.slides[0];
+    if (!spd) return;
+
+    beforeImg.src = spd.before_image_url;
+    beforeImg.style.display = "block";
+    beforePlaceholder.style.display = "none";
+
+    afterImg.src = spd.after_image_url;
+    afterImg.style.display = "block";
+    afterPlaceholder.style.display = "none";
+
+    if (diffBadge) {
+      diffBadge.style.display = spd.status === "modified" ? "inline-block" : "none";
+      diffBadge.textContent = spd.status === "modified" ? "● Changed" : "Unchanged";
+    }
+
+    renderOverlays(spd.overlays);
+  }
+
+  function renderOverlays(overlays) {
+    if (!highlightOverlayLayer) return;
+    highlightOverlayLayer.innerHTML = "";
+
+    if (!overlays || overlays.length === 0) return;
+
+    overlays.forEach((ov) => {
+      const box = document.createElement("div");
+      box.className = "diff-highlight-box";
+      box.style.left = `${(ov.x * 100).toFixed(2)}%`;
+      box.style.top = `${(ov.y * 100).toFixed(2)}%`;
+      box.style.width = `${(ov.width * 100).toFixed(2)}%`;
+      box.style.height = `${(ov.height * 100).toFixed(2)}%`;
+      box.title = `${ov.shape_name} (${ov.change_type})`;
+
+      const label = document.createElement("div");
+      label.className = "diff-highlight-label";
+      label.textContent = ov.shape_name || "Modified Element";
+      box.appendChild(label);
+
+      highlightOverlayLayer.appendChild(box);
+    });
+  }
+
+  function loadFallbackPreviews(jobId) {
+    beforeImg.src = `/api/v1/jobs/${jobId}/artifacts/slide_001_before.png`;
+    beforeImg.style.display = "block";
+    beforePlaceholder.style.display = "none";
+
+    afterImg.src = `/api/v1/jobs/${jobId}/artifacts/slide_001_after.png`;
+    afterImg.style.display = "block";
+    afterPlaceholder.style.display = "none";
   }
 
   function renderFindings(findings) {

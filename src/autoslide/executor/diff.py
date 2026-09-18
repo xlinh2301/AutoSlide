@@ -72,9 +72,19 @@ class StructuralDiffEngine:
                     unintended_changes.append(change)
                 continue
 
-            # Compare shapes on existing slide
-            shapes_before = {s.shape_id or s.shape_name: s for s in s_before.shapes}
-            shapes_after = {s.shape_id or s.shape_name: s for s in s_after.shapes}
+            # Compare shapes on existing slide (including nested group children)
+            def _collect_shapes(items: list[ShapeInventoryItem]) -> dict[str, ShapeInventoryItem]:
+                res: dict[str, ShapeInventoryItem] = {}
+                for sh in items:
+                    key = sh.shape_id or sh.shape_name
+                    res[key] = sh
+                    if sh.children:
+                        for child_key, child_sh in _collect_shapes(sh.children).items():
+                            res[child_key] = child_sh
+                return res
+
+            shapes_before = _collect_shapes(s_before.shapes)
+            shapes_after = _collect_shapes(s_after.shapes)
             shape_diff_items: list[ShapeDiff] = []
 
             for key, shape_b in shapes_before.items():

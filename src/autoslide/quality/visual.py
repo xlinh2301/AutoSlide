@@ -68,7 +68,7 @@ class VisualQualityGate:
 
                 # 2. Check Text Overflow (text length exceeds estimated capacity)
                 raw_text = shape.raw_text.strip() if shape.raw_text else ""
-                if raw_text and cx > 0 and cy > 0:
+                if shape.shape_type != "tbl" and shape.table_data is None and raw_text and cx > 0 and cy > 0:
                     # Determine effective font size in EMU (1 pt = 12,700 EMU)
                     font_size_pt = 18.0
                     if shape.text_runs and shape.text_runs[0].font_size:

@@ -14,7 +14,13 @@ from fastapi.staticfiles import StaticFiles
 
 from autoslide.config import Settings
 from autoslide.events import EventLog
-from autoslide.jobs.models import JobDecisionRequest, JobDecisionResponse, JobRecord, JobState
+from autoslide.jobs.models import (
+    EditScope,
+    JobDecisionRequest,
+    JobDecisionResponse,
+    JobRecord,
+    JobState,
+)
 from autoslide.jobs.registry import JobRegistry
 from autoslide.jobs.workspace import JobWorkspace
 from autoslide.orchestrator.pipeline import JobOrchestrator
@@ -75,6 +81,7 @@ def create_app(
         template: UploadFile = File(...),
         instruction: str = Form(...),
         runtime: str | None = Form(None),
+        scope: str | None = Form(None),
     ) -> JSONResponse:
         cleaned_instruction = instruction.strip()
         if not cleaned_instruction:
@@ -97,6 +104,17 @@ def create_app(
                 detail=f"Requested runtime '{runtime}' is not in allowed runtimes: {app_settings.allowed_runtimes}",
             )
 
+        parsed_scope: EditScope | None = None
+        if scope is not None:
+            try:
+                scope_dict = json.loads(scope)
+                if isinstance(scope_dict, dict):
+                    parsed_scope = EditScope.model_validate(scope_dict)
+                else:
+                    raise ValueError("Scope payload must be a JSON object")
+            except Exception as exc:
+                raise HTTPException(status_code=400, detail=f"Invalid scope payload: {exc}")
+
         input_sha256 = hashlib.sha256(content).hexdigest()
         job_record = app_registry.create(instruction=cleaned_instruction, input_sha256=input_sha256)
 
@@ -116,12 +134,13 @@ def create_app(
                 "instruction": cleaned_instruction,
                 "input_sha256": input_sha256,
                 "filename": safe_filename,
+                "scope": parsed_scope.model_dump() if parsed_scope else None,
             },
         )
 
-        def _execute_pipeline_bg(job_id: str, ws: JobWorkspace) -> None:
+        def _execute_pipeline_bg(job_id: str, ws: JobWorkspace, edit_scope: EditScope | None) -> None:
             try:
-                app_orchestrator.run_pipeline(job_id=job_id, workspace=ws)
+                app_orchestrator.run_pipeline(job_id=job_id, workspace=ws, scope=edit_scope)
             except Exception as exc:
                 try:
                     curr_job = app_registry.get(job_id)
@@ -140,9 +159,23 @@ def create_app(
                     {"error": str(exc)},
                 )
 
-        background_tasks.add_task(_execute_pipeline_bg, job_record.job_id, workspace)
+        background_tasks.add_task(_execute_pipeline_bg, job_record.job_id, workspace, parsed_scope)
 
         return JSONResponse(status_code=202, content=job_record.model_dump())
+
+    @app.get("/api/v1/jobs/{job_id}/diff")
+    @app.get("/api/v1/jobs/{job_id}/preview-diff")
+    def get_job_diff(job_id: str) -> dict:
+        try:
+            app_registry.get(job_id)
+        except KeyError:
+            raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+
+        diff_path = app_settings.data_root / "jobs" / job_id / "artifacts" / "preview_diff.json"
+        if not diff_path.exists():
+            raise HTTPException(status_code=404, detail="Preview diff not yet available for job")
+
+        return json.loads(diff_path.read_text(encoding="utf-8"))
 
     @app.get("/api/v1/jobs/{job_id}")
     def get_job(job_id: str) -> dict:
