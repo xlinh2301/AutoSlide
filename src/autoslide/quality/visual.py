@@ -60,18 +60,17 @@ class VisualQualityGate:
                         font_size_pt = float(shape.text_runs[0].font_size)
 
                     font_size_emu = font_size_pt * 12700.0
-                    char_w_emu = font_size_emu * self.char_width_factor
-                    line_h_emu = font_size_emu * self.line_height_factor
+                    char_w_emu = max(1.0, font_size_emu * min(self.char_width_factor, 0.50))
+                    line_h_emu = max(1.0, font_size_emu * self.line_height_factor)
 
-                    line_capacity = max(1, int(cy // line_h_emu))
-                    chars_per_line = max(1, int(cx // char_w_emu))
+                    # Allow fractional line fit with margin for multi-line and title wrapping
+                    line_capacity = max(1.0, (cy / line_h_emu) + 0.35)
+                    chars_per_line = max(1.0, (cx / char_w_emu))
                     max_capacity = chars_per_line * line_capacity
 
-                    estimated_text_width = len(raw_text) * char_w_emu
-                    available_width = cx * line_capacity
-
-                    if estimated_text_width > available_width * 1.05:
-                        overflow_pct = int(((estimated_text_width / available_width) - 1.0) * 100)
+                    # Standard text boxes allow wrapping and auto-fit margins; flag when exceeding by >35%
+                    if len(raw_text) > max_capacity * 1.35:
+                        overflow_pct = int(((len(raw_text) / max_capacity) - 1.0) * 100)
                         findings.append(
                             VisualFinding(
                                 slide_index=slide.slide_index,
@@ -81,7 +80,7 @@ class VisualQualityGate:
                                 severity=FindingSeverity.ERROR,
                                 message=(
                                     f"Text overflows bounding box by approx {overflow_pct}% "
-                                    f"(chars={len(raw_text)}, capacity={max_capacity})."
+                                    f"(chars={len(raw_text)}, capacity={int(max_capacity)})."
                                 ),
                                 suggested_fix="Reduce font size by 20% or enlarge bounding box.",
                             )

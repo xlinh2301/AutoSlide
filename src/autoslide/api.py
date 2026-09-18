@@ -182,7 +182,11 @@ def create_app(
         return StreamingResponse(event_generator(), media_type="text/event-stream")
 
     @app.post("/api/v1/jobs/{job_id}/decision")
-    def submit_decision(job_id: str, request: JobDecisionRequest) -> dict:
+    def submit_decision(
+        job_id: str,
+        request: JobDecisionRequest,
+        background_tasks: BackgroundTasks,
+    ) -> dict:
         try:
             current_job = app_registry.get(job_id)
         except KeyError:
@@ -225,6 +229,24 @@ def create_app(
                 "resulting_state": target_state.value,
             },
         )
+
+        if decision == "repair":
+            def _execute_repair_bg(j_id: str, ws: JobWorkspace, feedback: str | None) -> None:
+                try:
+                    app_orchestrator.run_repair(job_id=j_id, workspace=ws, feedback=feedback)
+                except Exception as exc:
+                    try:
+                        app_registry.force_state(j_id, JobState.FAILED)
+                    except Exception:
+                        pass
+                    app_event_log.append(
+                        j_id,
+                        "REPAIR_ERROR",
+                        {"error": str(exc)},
+                    )
+
+            workspace = JobWorkspace(root=app_settings.data_root / "jobs" / job_id, job_id=job_id)
+            background_tasks.add_task(_execute_repair_bg, job_id, workspace, request.feedback)
 
         resp = JobDecisionResponse(
             job_id=job_id,
