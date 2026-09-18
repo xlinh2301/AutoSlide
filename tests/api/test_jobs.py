@@ -59,7 +59,7 @@ def test_get_job_status(client, valid_pptx):
     assert get_res.status_code == 200
     body = get_res.json()
     assert body["job_id"] == job_id
-    assert body["state"] == "CREATED"
+    assert body["state"] == "AWAITING_USER_APPROVAL"
 
 
 def test_get_nonexistent_job_returns_404(client):

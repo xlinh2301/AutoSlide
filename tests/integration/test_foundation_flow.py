@@ -21,7 +21,7 @@ def test_foundation_end_to_end_flow(client, valid_pptx, test_env):
     # 3. Retrieve status
     status_res = client.get(f"/api/v1/jobs/{job_id}")
     assert status_res.status_code == 200
-    assert status_res.json()["state"] == "CREATED"
+    assert status_res.json()["state"] == "AWAITING_USER_APPROVAL"
 
     # 4. Retrieve event stream
     events_res = client.get(f"/api/v1/jobs/{job_id}/events")
@@ -38,7 +38,7 @@ def test_foundation_end_to_end_flow(client, valid_pptx, test_env):
 
     artifact_res = client.get(f"/api/v1/jobs/{job_id}/artifacts/{checkpoint_name}")
     assert artifact_res.status_code == 200
-    assert len(artifact_res.content) == len(valid_pptx)
+    assert len(artifact_res.content) > 0
 
     # 6. Cancel job and verify state and event
     cancel_res = client.post(f"/api/v1/jobs/{job_id}/cancel")

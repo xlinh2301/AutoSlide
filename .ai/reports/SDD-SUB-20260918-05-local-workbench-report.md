@@ -36,11 +36,15 @@ The Phase 6 Local Workbench slice was implemented following the approved sub-spe
    - Added `AntigravityAdapter` (`name="antigravity"`) supporting wrapper resolution priority (`agy_c` > `agy` > `antigravity`), execution via `--print <prompt> --add-dir <workspace>`, and authentication/model verification via `models`.
    - Updated `VALID_RUNTIMES` in `src/autoslide/config.py` and registered `AntigravityAdapter` in `RuntimeRegistry`.
 
+7. **Pipeline Background Dispatch & Registry Concurrency (`src/autoslide/api.py`, `src/autoslide/jobs/registry.py`, `src/autoslide/events.py`)**:
+   - Added `BackgroundTasks` dispatch to `POST /api/v1/jobs` to execute `JobOrchestrator.run_pipeline` in the background after returning HTTP 202, ensuring jobs advance beyond `CREATED` through all lifecycle stages to `AWAITING_USER_APPROVAL`.
+   - Added `threading.RLock` synchronization to `JobRegistry` and `EventLog` to ensure thread-safe SQLite and event access during simultaneous status/events polling and pipeline execution.
+
 ---
 
 ## 2. Verification Results
 
-- **Runtime & API Test Suites**: All passed (`tests/runtime/test_adapters.py`, `tests/runtime/test_discovery.py`, `tests/api/test_workbench_api.py`).
-- **Full Regression Suite**: 110 / 110 passed across all project modules (`pytest`).
+- **Runtime & API Test Suites**: All passed (`tests/runtime/test_adapters.py`, `tests/runtime/test_discovery.py`, `tests/api/test_workbench_api.py`, `tests/api/test_jobs.py`).
+- **Full Regression Suite**: 112 / 112 passed across all project modules (`pytest`).
 - **Bytecode Compilation**: `python3 -m compileall src tests` passed with 0 errors.
 - **Git Hygiene**: Clean diff, no secrets or local machine paths.

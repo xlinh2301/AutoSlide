@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 import sqlite3
+import threading
 from typing import ClassVar
 from uuid import uuid4
 
@@ -60,13 +61,14 @@ class JobRegistry:
         self.db_path = str(db_path)
         if self.db_path != ":memory:":
             Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
+        self._lock = threading.RLock()
         self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._init_db()
 
     def _init_db(self) -> None:
         """Create tables and indexes within a transaction."""
-        with self._conn:
+        with self._lock, self._conn:
             self._conn.execute("PRAGMA journal_mode=WAL;")
             self._conn.execute(
                 """
@@ -93,7 +95,7 @@ class JobRegistry:
         state = JobState.CREATED.value
 
         try:
-            with self._conn:
+            with self._lock, self._conn:
                 self._conn.execute(
                     """
                     INSERT INTO jobs (job_id, state, instruction, input_sha256, created_at, updated_at)
@@ -115,26 +117,27 @@ class JobRegistry:
 
     def get(self, job_id: str) -> JobRecord:
         """Retrieve an existing job record by identifier."""
-        cur = self._conn.execute(
-            "SELECT job_id, state, instruction, input_sha256, created_at, updated_at FROM jobs WHERE job_id = ?",
-            (job_id,),
-        )
-        row = cur.fetchone()
-        if row is None:
-            raise KeyError(f"Job not found: '{job_id}'")
+        with self._lock:
+            cur = self._conn.execute(
+                "SELECT job_id, state, instruction, input_sha256, created_at, updated_at FROM jobs WHERE job_id = ?",
+                (job_id,),
+            )
+            row = cur.fetchone()
+            if row is None:
+                raise KeyError(f"Job not found: '{job_id}'")
 
-        return JobRecord(
-            job_id=row["job_id"],
-            state=JobState(row["state"]),
-            instruction=row["instruction"],
-            input_sha256=row["input_sha256"],
-            created_at=row["created_at"],
-            updated_at=row["updated_at"],
-        )
+            return JobRecord(
+                job_id=row["job_id"],
+                state=JobState(row["state"]),
+                instruction=row["instruction"],
+                input_sha256=row["input_sha256"],
+                created_at=row["created_at"],
+                updated_at=row["updated_at"],
+            )
 
     def transition(self, job_id: str, new_state: JobState) -> JobRecord:
         """Transition job to a new state if permitted by the lifecycle state machine."""
-        with self._conn:
+        with self._lock, self._conn:
             cur = self._conn.execute(
                 "SELECT job_id, state, instruction, input_sha256, created_at, updated_at FROM jobs WHERE job_id = ?",
                 (job_id,),
@@ -168,12 +171,24 @@ class JobRegistry:
                 (new_state.value, now, job_id),
             )
 
-        return self.get(job_id)
+            cur = self._conn.execute(
+                "SELECT job_id, state, instruction, input_sha256, created_at, updated_at FROM jobs WHERE job_id = ?",
+                (job_id,),
+            )
+            updated_row = cur.fetchone()
+            return JobRecord(
+                job_id=updated_row["job_id"],
+                state=JobState(updated_row["state"]),
+                instruction=updated_row["instruction"],
+                input_sha256=updated_row["input_sha256"],
+                created_at=updated_row["created_at"],
+                updated_at=updated_row["updated_at"],
+            )
 
     def force_state(self, job_id: str, state: JobState) -> None:
         """Force a state change for testing lifecycle stages directly."""
         now = datetime.now(timezone.utc).isoformat()
-        with self._conn:
+        with self._lock, self._conn:
             cur = self._conn.execute(
                 "UPDATE jobs SET state = ?, updated_at = ? WHERE job_id = ?",
                 (state.value, now, job_id),

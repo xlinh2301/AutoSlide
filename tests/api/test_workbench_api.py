@@ -196,3 +196,95 @@ def test_default_runtime_registry_endpoint_exposes_all_runtimes(tmp_path: Path):
         assert "installed" in r
         assert "authenticated" in r
 
+
+def test_job_creation_dispatches_pipeline_and_advances_beyond_created(tmp_path: Path):
+    import io
+    from tests.fixtures.pptx_samples import create_minimal_pptx
+
+    settings = Settings(data_root=tmp_path / "data")
+    registry = JobRegistry(tmp_path / "jobs.db")
+    event_log = EventLog(tmp_path / "logs")
+    app = create_app(settings=settings, registry=registry, event_log=event_log)
+    test_client = TestClient(app)
+
+    pptx_bytes = create_minimal_pptx()
+    res = test_client.post(
+        "/api/v1/jobs",
+        files={"template": ("sample.pptx", io.BytesIO(pptx_bytes), "application/vnd.openxmlformats-officedocument.presentationml.presentation")},
+        data={"instruction": "Change slide title to Executive Summary", "runtime": "codex"},
+    )
+    assert res.status_code == 202
+    job_data = res.json()
+    job_id = job_data["job_id"]
+    assert job_data["state"] == "CREATED"
+
+    # Verify that the background task advanced the job state
+    job_status_res = test_client.get(f"/api/v1/jobs/{job_id}")
+    assert job_status_res.status_code == 200
+    current_job = job_status_res.json()
+    assert current_job["state"] == "AWAITING_USER_APPROVAL"
+
+    # Verify event stream records the transitions
+    events_res = test_client.get(f"/api/v1/jobs/{job_id}/events")
+    assert events_res.status_code == 200
+    events = events_res.json()
+    event_types = [e["event_type"] for e in events]
+    assert "JOB_CREATED" in event_types
+    assert "STAGE_STARTED" in event_types
+    assert "AWAITING_APPROVAL" in event_types
+
+    # Ensure artifacts were generated and accessible
+    art_res = test_client.get(f"/api/v1/jobs/{job_id}/artifacts/quality_report.json")
+    assert art_res.status_code == 200
+    assert "overall_verdict" in art_res.json()
+
+
+def test_concurrent_job_state_and_events_polling(tmp_path: Path):
+    import concurrent.futures
+    import io
+    from tests.fixtures.pptx_samples import create_minimal_pptx
+
+    settings = Settings(data_root=tmp_path / "data")
+    registry = JobRegistry(tmp_path / "jobs.db")
+    event_log = EventLog(tmp_path / "logs")
+    app = create_app(settings=settings, registry=registry, event_log=event_log)
+    test_client = TestClient(app)
+
+    pptx_bytes = create_minimal_pptx()
+    res = test_client.post(
+        "/api/v1/jobs",
+        files={"template": ("sample.pptx", io.BytesIO(pptx_bytes), "application/octet-stream")},
+        data={"instruction": "Concurrent test", "runtime": "codex"},
+    )
+    assert res.status_code == 202
+    job_id = res.json()["job_id"]
+
+    errors = []
+
+    def poll_job():
+        try:
+            r = test_client.get(f"/api/v1/jobs/{job_id}")
+            if r.status_code != 200:
+                errors.append(f"Unexpected status code {r.status_code}")
+        except Exception as e:
+            errors.append(str(e))
+
+    def poll_events():
+        try:
+            r = test_client.get(f"/api/v1/jobs/{job_id}/events")
+            if r.status_code != 200:
+                errors.append(f"Unexpected status code {r.status_code}")
+        except Exception as e:
+            errors.append(str(e))
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+        futures = []
+        for _ in range(25):
+            futures.append(executor.submit(poll_job))
+            futures.append(executor.submit(poll_events))
+        for f in concurrent.futures.as_completed(futures):
+            f.result()
+
+    assert len(errors) == 0, f"Concurrent polling produced errors: {errors}"
+
+

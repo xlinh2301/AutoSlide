@@ -12,16 +12,13 @@ from autoslide.runtime.adapters import FakeRuntimeAdapter
 from autoslide.runtime.discovery import RuntimeRegistry
 
 
+from tests.fixtures.pptx_samples import create_minimal_pptx
+
+
 @pytest.fixture
 def valid_pptx() -> bytes:
     """Create a minimal valid zip/pptx byte stream for testing."""
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w") as zf:
-        zf.writestr(
-            "[Content_Types].xml",
-            '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>',
-        )
-    return buf.getvalue()
+    return create_minimal_pptx()
 
 
 @pytest.fixture

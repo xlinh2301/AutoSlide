@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 from typing import AsyncGenerator
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -17,6 +17,7 @@ from autoslide.events import EventLog
 from autoslide.jobs.models import JobDecisionRequest, JobDecisionResponse, JobRecord, JobState
 from autoslide.jobs.registry import JobRegistry
 from autoslide.jobs.workspace import JobWorkspace
+from autoslide.orchestrator.pipeline import JobOrchestrator
 from autoslide.runtime.discovery import RuntimeRegistry
 from autoslide.ui import STATIC_DIR, TEMPLATES_DIR
 
@@ -26,6 +27,7 @@ def create_app(
     registry: JobRegistry | None = None,
     runtime_registry: RuntimeRegistry | None = None,
     event_log: EventLog | None = None,
+    orchestrator: JobOrchestrator | None = None,
 ) -> FastAPI:
     """Create and wire the AutoSlide FastAPI application."""
     app_settings = settings or Settings.from_env()
@@ -34,6 +36,10 @@ def create_app(
     app_registry = registry or JobRegistry(app_settings.data_root / "jobs.db")
     app_runtime_registry = runtime_registry or RuntimeRegistry()
     app_event_log = event_log or EventLog(log_path=app_settings.data_root / "logs")
+    app_orchestrator = orchestrator or JobOrchestrator(
+        registry=app_registry,
+        event_log=app_event_log,
+    )
 
     app = FastAPI(
         title="AutoSlide Foundation API",
@@ -65,6 +71,7 @@ def create_app(
 
     @app.post("/api/v1/jobs")
     async def create_job(
+        background_tasks: BackgroundTasks,
         template: UploadFile = File(...),
         instruction: str = Form(...),
         runtime: str | None = Form(None),
@@ -111,6 +118,29 @@ def create_app(
                 "filename": safe_filename,
             },
         )
+
+        def _execute_pipeline_bg(job_id: str, ws: JobWorkspace) -> None:
+            try:
+                app_orchestrator.run_pipeline(job_id=job_id, workspace=ws)
+            except Exception as exc:
+                try:
+                    curr_job = app_registry.get(job_id)
+                    if curr_job.state not in (
+                        JobState.FAILED,
+                        JobState.ACCEPTED,
+                        JobState.REJECTED,
+                        JobState.CANCELLED,
+                    ):
+                        app_registry.transition(job_id, JobState.FAILED)
+                except Exception:
+                    pass
+                app_event_log.append(
+                    job_id,
+                    "PIPELINE_ERROR",
+                    {"error": str(exc)},
+                )
+
+        background_tasks.add_task(_execute_pipeline_bg, job_record.job_id, workspace)
 
         return JSONResponse(status_code=202, content=job_record.model_dump())
 
