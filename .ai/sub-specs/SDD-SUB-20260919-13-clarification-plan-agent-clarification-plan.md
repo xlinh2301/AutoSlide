@@ -2,7 +2,7 @@
 id: SDD-SUB-20260919-13
 title: Clarification and Plan Conversation Service
 author: agent-clarification-plan
-status: DRAFT # DRAFT | REVIEW | APPROVED | MERGED | COMPLETED
+status: COMPLETED # DRAFT | REVIEW | APPROVED | MERGED | COMPLETED
 main_spec: "[[.ai/specs/ADS-002/requirements.md]]"
 summary: "Implement ConversationService and ClarificationEngine to evaluate vague requests with targeted single questions, generate typed plan cards in WAITING_PLAN_APPROVAL for complete requests, and maintain multi-turn follow-up context."
 decisions: 
@@ -28,7 +28,7 @@ risk_level: LOW
 > [!ABSTRACT] Tóm tắt cho AI
 > **Mục tiêu**: Hiện thực hóa `ConversationService` và `ClarificationEngine` thuộc Task 2 của `ADS-002`. Xử lý yêu cầu tự nhiên không rõ ràng bằng cách đặt đúng 1 câu hỏi trọng tâm (không sửa đổi slide hay tạo mutation TaskPlan), chuyển sang `WAITING_PLAN_APPROVAL` kèm typed plan card khi yêu cầu đã đầy đủ, và hỗ trợ hội thoại lặp (follow-up turns) với context và previous brief.
 > **Quyết định then chốt**: Kiểm tra thiếu trường (target, action, content, preservation) một cách tất định (deterministic); không gọi adapter tự ý sửa deck; chuyển trạng thái tuân thủ nghiêm ngặt state machine; đóng gói card phản hồi theo cấu trúc chuẩn.
-> **Rủi ro**: #risk/LOW | **Trạng thái**: #status/DRAFT
+> **Rủi ro**: #risk/LOW | **Trạng thái**: #status/COMPLETED
 
 ---
 
@@ -90,12 +90,12 @@ Hiện thực hóa Task 2 của kế hoạch Always-on Agent Chat (`ADS-002`):
 
 ## 4. Tiêu chí Chấp nhận (Acceptance Criteria)
 
-- [ ] **AC-1**: Yêu cầu mơ hồ (ví dụ: "make this better", "update the title") sinh ra đúng 1 câu hỏi làm rõ (`Question`), trạng thái ở `NEEDS_CLARIFICATION`, và tuyệt đối không tạo `TaskPlan` mutation.
-- [ ] **AC-2**: Yêu cầu đầy đủ (ví dụ: "On slide 1, change the title to 'Q3 Financial Results'") sinh ra `TaskPlan`, chuyển session sang `WAITING_PLAN_APPROVAL`, và đính kèm typed `PlanCard`.
-- [ ] **AC-3**: `SelectionContext` (ví dụ `slide_index=1`) được tôn trọng và tự động điền vào trường target còn thiếu nếu user không nhắc lại số slide trong lời nhắn.
-- [ ] **AC-4**: Follow-up turns: Khi session đã có `previous_brief` thiếu `content`, tin nhắn tiếp theo chứa content sẽ hoàn thiện brief và chuyển sang `WAITING_PLAN_APPROVAL`.
-- [ ] **AC-5**: `ConversationService.handle_message` ghi nhận đầy đủ `ChatTurn` (user + assistant) và lưu atomic checkpoint vào `SessionStore`.
-- [ ] **AC-6**: Tất cả tests mới trong `tests/conversation/test_service.py` và `tests/conversation/test_clarification.py` chạy qua 100%, đồng thời không gây hồi quy trên `tests/planner`.
+- [x] **AC-1**: Yêu cầu mơ hồ (ví dụ: "make this better", "update the title") sinh ra đúng 1 câu hỏi làm rõ (`Question`), trạng thái ở `NEEDS_CLARIFICATION`, và tuyệt đối không tạo `TaskPlan` mutation.
+- [x] **AC-2**: Yêu cầu đầy đủ (ví dụ: "On slide 1, change the title to 'Q3 Financial Results'") sinh ra `TaskPlan`, chuyển session sang `WAITING_PLAN_APPROVAL`, và đính kèm typed `PlanCard`.
+- [x] **AC-3**: `SelectionContext` (ví dụ `slide_index=1`) được tôn trọng và tự động điền vào trường target còn thiếu nếu user không nhắc lại số slide trong lời nhắn.
+- [x] **AC-4**: Follow-up turns: Khi session đã có `previous_brief` thiếu `content`, tin nhắn tiếp theo chứa content sẽ hoàn thiện brief và chuyển sang `WAITING_PLAN_APPROVAL`.
+- [x] **AC-5**: `ConversationService.handle_message` ghi nhận đầy đủ `ChatTurn` (user + assistant) và lưu atomic checkpoint vào `SessionStore`.
+- [x] **AC-6**: Tất cả tests mới trong `tests/conversation/test_service.py` và `tests/conversation/test_clarification.py` chạy qua 100%, đồng thời không gây hồi quy trên `tests/planner`.
 
 ---
 
@@ -105,13 +105,21 @@ Hiện thực hóa Task 2 của kế hoạch Always-on Agent Chat (`ADS-002`):
 ```bash
 # 1. Chạy test mới cho clarification và service
 pytest tests/conversation/test_clarification.py tests/conversation/test_service.py -q -v
+# Output: 13 passed in 0.10s
 
 # 2. Chạy test liên quan cho toàn bộ module conversation và planner
 pytest tests/conversation tests/planner -q
+# Output: 44 passed in 0.40s
 
 # 3. Kiểm tra cú pháp và compile
 python3 -m compileall src tests
+# Output: 0 errors
+
+# 4. Regression toàn hệ thống
+pytest -q
+# Output: 166 passed, 1 warning in 175.75s
 ```
+
 
 ### Manual QA
 1. Khởi tạo `ConversationSession` và gọi `ConversationService.handle_message` với câu lệnh mập mờ `"Fix my slide"`.

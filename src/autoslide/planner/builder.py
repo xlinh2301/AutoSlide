@@ -89,3 +89,90 @@ class PromptPayloadBuilder:
                         )
 
         return "\n".join(lines)
+
+    def build_plan_from_brief(
+        self,
+        brief: Any,
+        inventory: DeckInventory | None = None,
+    ) -> TaskPlan:
+        """Construct a strongly typed TaskPlan from a completed EditBrief."""
+        from autoslide.planner.models import (
+            DeleteSlideOp,
+            DuplicateSlideOp,
+            ReplaceTextOp,
+            TargetReference,
+            TargetScope,
+        )
+
+        slide_index = 1
+        object_ref: str | None = None
+        if brief.target_scope:
+            slide_index = brief.target_scope[0].slide_index
+            object_ref = brief.target_scope[0].object_ref
+
+        # Look up shape fingerprint in inventory if available
+        resolved_fp = object_ref
+        if inventory:
+            target_slide = next((s for s in inventory.slides if s.slide_index == slide_index), None)
+            if target_slide and target_slide.shapes:
+                if object_ref and object_ref.lower() in ("title", "subtitle"):
+                    matched_shape = next(
+                        (
+                            sh
+                            for sh in target_slide.shapes
+                            if (sh.placeholder_type and object_ref.lower() in sh.placeholder_type.lower())
+                            or (sh.shape_name and object_ref.lower() in sh.shape_name.lower())
+                            or (sh.shape_type and object_ref.lower() in sh.shape_type.lower())
+                        ),
+                        target_slide.shapes[0],
+                    )
+                    resolved_fp = matched_shape.fingerprint
+                elif not object_ref:
+                    resolved_fp = target_slide.shapes[0].fingerprint
+
+        if not resolved_fp:
+            resolved_fp = f"fp-slide{slide_index}-title"
+
+        preserve = list(brief.constraints) if brief.constraints else ["font_family", "position"]
+        goal_lower = brief.goal.lower()
+        operations = []
+
+        if "delete" in goal_lower and "slide" in goal_lower:
+            operations.append(DeleteSlideOp(slide_index=slide_index, preserve=preserve))
+        elif "duplicate" in goal_lower:
+            operations.append(
+                DuplicateSlideOp(
+                    source_slide_index=slide_index,
+                    insert_at_index=slide_index + 1,
+                    preserve=preserve,
+                )
+            )
+        else:
+            # Extract replacement text value from brief.goal
+            import re
+
+            quoted = re.findall(r'["\']([^"\']+)["\']|[“”]([^“”]+)[“”]', brief.goal)
+            if quoted:
+                first = quoted[-1]
+                value = first[0] if first[0] else first[1]
+            else:
+                value = brief.goal
+
+            operations.append(
+                ReplaceTextOp(
+                    target=TargetReference(slide_index=slide_index, object_ref=resolved_fp),
+                    value=value,
+                    preserve=preserve,
+                )
+            )
+
+        target_scope = [TargetScope(slide_index=slide_index, object_ref=resolved_fp)]
+
+        return TaskPlan(
+            schema_version="1.0",
+            target_scope=target_scope,
+            operations=operations,
+            requires_review=False,
+            rationale=brief.goal,
+        )
+
