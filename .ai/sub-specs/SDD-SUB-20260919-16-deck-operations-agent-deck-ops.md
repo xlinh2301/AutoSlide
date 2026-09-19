@@ -2,7 +2,7 @@
 id: SDD-SUB-20260919-16
 title: Deck Structure and Arbitrary Supported Content Operations
 author: agent-deck-ops
-status: DRAFT # DRAFT | REVIEW | APPROVED | MERGED
+status: APPROVED # DRAFT | REVIEW | APPROVED | MERGED
 main_spec: "[[.ai/specs/ADS-002/requirements.md]]"
 summary: "Implement conversational deck structure operations (AddSlideOp, DeleteSlideOp, DuplicateSlideOp, ReorderSlideOp, AddContentOp) with OOXML mutators, index normalization, bounds validation, and postcondition verification."
 decisions:
