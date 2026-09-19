@@ -17,10 +17,21 @@ from autoslide.conversation.service import (
     ConversationService,
     SelectionContext,
 )
+from autoslide.conversation.schemas import (
+    ApproveDecisionRequest,
+    ApproveDecisionResponse,
+    CreateSessionResponse,
+    ExecuteSessionResponse,
+    SendMessageRequest,
+    SessionDetailResponse,
+    SessionEventsResponse,
+)
 from autoslide.conversation.state import TRANSITION_RULES, validate_transition
 from autoslide.conversation.store import SessionStore
 
 __all__ = [
+    "ApproveDecisionRequest",
+    "ApproveDecisionResponse",
     "ChatTurn",
     "ClarificationEngine",
     "ClarificationResult",
@@ -28,9 +39,14 @@ __all__ = [
     "ConversationService",
     "ConversationSession",
     "ConversationState",
+    "CreateSessionResponse",
     "EditBrief",
+    "ExecuteSessionResponse",
     "Question",
     "SelectionContext",
+    "SendMessageRequest",
+    "SessionDetailResponse",
+    "SessionEventsResponse",
     "SessionStore",
     "TRANSITION_RULES",
     "validate_transition",

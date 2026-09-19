@@ -6,6 +6,7 @@ import pytest
 
 from autoslide.api import create_app
 from autoslide.config import Settings
+from autoslide.conversation.store import SessionStore
 from autoslide.events import EventLog
 from autoslide.jobs.registry import JobRegistry
 from autoslide.runtime.adapters import FakeRuntimeAdapter
@@ -35,11 +36,13 @@ def test_env(tmp_path: Path):
     runtime_registry = RuntimeRegistry([
         FakeRuntimeAdapter(mock_stdout="Done", mock_exit_code=0)
     ])
+    session_store = SessionStore(base_dir=data_root)
     app = create_app(
         settings=settings,
         registry=registry,
         runtime_registry=runtime_registry,
         event_log=event_log,
+        session_store=session_store,
     )
     return {
         "app": app,
@@ -47,6 +50,7 @@ def test_env(tmp_path: Path):
         "registry": registry,
         "event_log": event_log,
         "runtime_registry": runtime_registry,
+        "session_store": session_store,
     }
 
 

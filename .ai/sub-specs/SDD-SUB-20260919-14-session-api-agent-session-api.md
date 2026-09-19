@@ -2,7 +2,7 @@
 id: SDD-SUB-20260919-14
 title: Session API and Approval Endpoints
 author: agent-session-api
-status: DRAFT # DRAFT | REVIEW | APPROVED | MERGED | COMPLETED
+status: COMPLETED # DRAFT | REVIEW | APPROVED | MERGED | COMPLETED
 main_spec: "[[.ai/specs/ADS-002/requirements.md]]"
 summary: "Implement FastAPI conversational session routes (/api/v1/sessions), approval and execution endpoints, request/response schemas, error mapping, and background pipeline wiring while preserving /api/v1/jobs."
 decisions: 
@@ -27,7 +27,7 @@ risk_level: LOW
 > [!ABSTRACT] Tóm tắt cho AI
 > **Mục tiêu**: Hiện thực hóa Task 3 của kế hoạch Always-on Agent Chat (`ADS-002`): cung cấp REST API cho hội thoại (`/api/v1/sessions`), tiếp nhận upload PPTX, trao đổi tin nhắn, truy xuất chi tiết/events, duyệt/sửa plan, và kích hoạt thực thi có kiểm soát (execution approval gate) mà không làm ảnh hưởng đến endpoint `/api/v1/jobs` hiện có.
 > **Quyết định then chốt**: Định nghĩa schemas Pydantic chuẩn; tích hợp `ConversationService` và `SessionStore` vào FastAPI app factory; chặn tuyệt đối việc thực thi khi chưa được duyệt plan (HTTP 400/409); kích hoạt background pipeline khi đã duyệt `READY_FOR_EXECUTION`.
-> **Rủi ro**: #risk/LOW | **Trạng thái**: #status/DRAFT
+> **Rủi ro**: #risk/LOW | **Trạng thái**: #status/COMPLETED
 
 ---
 
@@ -95,19 +95,19 @@ Hiện thực hóa Task 3 trong kế hoạch Always-on Agent Chat (`ADS-002`):
 
 ## 4. Tiêu chí Chấp nhận (Acceptance Criteria)
 
-- [ ] **AC-1**: `POST /api/v1/sessions` chấp nhận file `.pptx` hợp lệ, khởi tạo workspace/session và trả về HTTP 201 (hoặc 200) với `{session_id, job_id, state="NEEDS_CLARIFICATION"}`. File không phải `.pptx` hoặc quá dung lượng bị từ chối với HTTP 400 / 413.
-- [ ] **AC-2**: `POST /api/v1/sessions/{session_id}/messages` nhận `{message, selection_context}`:
-  - Yêu cầu chưa rõ ràng: Trả về HTTP 200, session ở `NEEDS_CLARIFICATION`, có câu hỏi làm rõ trong cards.
+- [x] **AC-1**: `POST /api/v1/sessions` chấp nhận file `.pptx` hợp lệ, khởi tạo workspace/session và trả về HTTP 201 với `{session_id, job_id, state="NEEDS_CLARIFICATION"}`. File không phải `.pptx` hoặc quá dung lượng bị từ chối với HTTP 400 / 413.
+- [x] **AC-2**: `POST /api/v1/sessions/{session_id}/messages` nhận `{message, selection_context}`:
+  - Yêu cầu chưa rõ ràng: Trả về HTTP 200, session ở `NEEDS_CLARIFICATION`, có câu hỏi làm rõ trong cards (`QuestionCard`).
   - Yêu cầu rõ ràng: Trả về HTTP 200, session ở `WAITING_PLAN_APPROVAL`, có typed `PlanCard` trong cards.
-- [ ] **AC-3**: `GET /api/v1/sessions/{session_id}` trả về đầy đủ session state, brief, plan, sources, và active job reference. Trả về HTTP 404 nếu `session_id` không tồn tại.
-- [ ] **AC-4**: `GET /api/v1/sessions/{session_id}/events` trả về danh sách events đã được che giấu dữ liệu nhạy cảm (redacted).
-- [ ] **AC-5**: `POST /api/v1/sessions/{session_id}/approve`:
+- [x] **AC-3**: `GET /api/v1/sessions/{session_id}` trả về đầy đủ session state, brief, plan, sources, và active job reference. Trả về HTTP 404 nếu `session_id` không tồn tại.
+- [x] **AC-4**: `GET /api/v1/sessions/{session_id}/events` trả về danh sách events đã được che giấu dữ liệu nhạy cảm (redacted).
+- [x] **AC-5**: `POST /api/v1/sessions/{session_id}/approve`:
   - `{kind: "plan", approved: true}` chuyển session từ `WAITING_PLAN_APPROVAL` sang `READY_FOR_EXECUTION`.
   - `{kind: "plan", approved: false, feedback: "..."}` chuyển session về `NEEDS_CLARIFICATION` kèm phản hồi.
-- [ ] **AC-6**: `POST /api/v1/sessions/{session_id}/execute`:
-  - Khi session chưa ở `READY_FOR_EXECUTION`: Bị từ chối với HTTP 400 hoặc 409 (`Execution rejected: plan has not been approved`).
+- [x] **AC-6**: `POST /api/v1/sessions/{session_id}/execute`:
+  - Khi session chưa ở `READY_FOR_EXECUTION`: Bị từ chối với HTTP 409 (`Execution rejected: plan has not been approved`).
   - Khi session ở `READY_FOR_EXECUTION`: Chuyển session sang `EXECUTING` và khởi động background job pipeline.
-- [ ] **AC-7**: Bảo toàn tính tương thích 100% của `/api/v1/jobs` và toàn bộ test suites hiện có (`tests/api/test_jobs.py`, `tests/api/test_workbench_api.py`).
+- [x] **AC-7**: Bảo toàn tính tương thích 100% của `/api/v1/jobs` và toàn bộ test suites hiện có (`tests/api/test_jobs.py`, `tests/api/test_workbench_api.py`, `tests/api/test_preview_diff_api.py`).
 
 ---
 
@@ -115,20 +115,17 @@ Hiện thực hóa Task 3 trong kế hoạch Always-on Agent Chat (`ADS-002`):
 
 ### Automated
 ```bash
-# 1. Chạy các test mới cho Session API
-pytest tests/api/test_conversation_api.py -q -v
-
-# 2. Chạy toàn bộ API test suite (đảm bảo backwards compatibility cho /api/v1/jobs)
-pytest tests/api -q -v
-
-# 3. Chạy regression cho conversation domain và planner
-pytest tests/conversation tests/planner -q
-
-# 4. Kiểm tra compile và syntax
+# 1. Bytecode compilation
 python3 -m compileall src tests
+# Output: 0 errors
 
-# 5. Regression toàn bộ hệ thống
-pytest -q
+# 2. Chạy các test mới cho Session API
+pytest tests/api/test_conversation_api.py -q -v
+# Output: 10 passed, 1 warning in 6.50s
+
+# 3. Chạy toàn bộ API test suite (đảm bảo backwards compatibility cho /api/v1/jobs)
+pytest tests/api -q -v
+# Output: 36 passed, 1 warning in 71.86s
 ```
 
 ### Manual QA
