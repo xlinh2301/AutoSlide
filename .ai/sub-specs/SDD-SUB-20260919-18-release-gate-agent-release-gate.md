@@ -2,7 +2,7 @@
 id: SDD-SUB-20260919-18
 title: Release Gate, Final Documentation & Full Evidence Verification
 author: agent-release-gate
-status: APPROVED # DRAFT | REVIEW | APPROVED | MERGED
+status: COMPLETED # DRAFT | REVIEW | APPROVED | MERGED | COMPLETED
 main_spec: "[[.ai/specs/ADS-002/requirements.md]]"
 summary: "Execute final release gate for ADS-002 Always-on Agent Chat: compile comprehensive evidence verification report, update README and capability documentation, verify end-to-end test suites and safety invariants, and advance spec statuses to COMPLETED."
 decisions:
@@ -25,7 +25,7 @@ risk_level: LOW # LOW | MEDIUM | HIGH
 > [!ABSTRACT] Tóm tắt cho AI
 > **Mục tiêu**: Thực hiện Release Gate cho năng lực `ADS-002` (Always-on Agent Chat): tổng hợp báo cáo bằng chứng xác thực (`.ai/reports/ADS-002-evidence.md`), cập nhật tài liệu kỹ thuật & hướng dẫn người dùng (`README.md`, `CAPABILITY_MAP.md`), đánh dấu hoàn thành các tiêu chí nghiệm thu trong specs (`requirements.md`, `tasks.md`), và xác minh 100% các cổng kiểm thử tự động, an toàn và toàn vẹn mã nguồn.
 > **Quyết định then chốt**: Thu thập kết quả chạy thực tế của toàn bộ test suite; ghi nhận đầy đủ ma trận truy vết yêu cầu (Traceability Matrix); cập nhật tài liệu hệ thống rõ ràng về kiến trúc session, policy duyệt kế hoạch & nguồn tin, không lưu API key; đảm bảo quy chuẩn commit và đóng gói release sạch.
-> **Rủi ro**: #risk/LOW | **Trạng thái**: #status/DRAFT
+> **Rủi ro**: #risk/LOW | **Trạng thái**: #status/COMPLETED
 
 ---
 
@@ -83,16 +83,16 @@ Hoàn thành Task 7 theo kế hoạch `docs/superpowers/plans/2026-09-19-always-
 
 ## 4. Tiêu chí Chấp nhận (Acceptance Criteria)
 
-- [ ] `README.md` phản ánh đầy đủ kiến trúc hội thoại mới, cách sử dụng Always-on Chatbot, workflow duyệt kế hoạch/nguồn, và hướng dẫn chạy smoke test.
-- [ ] `CAPABILITY_MAP.md` và `.ai/specs/ADS-002/CAPABILITY_MAP.md` được cập nhật đầy đủ thông tin về ADS-002.
-- [ ] `.ai/specs/ADS-002/requirements.md` có Status `COMPLETED` và 9/9 tiêu chí nghiệm thu được đánh dấu `[x]`.
-- [ ] `.ai/specs/ADS-002/tasks.md` được đánh dấu hoàn thành toàn bộ các Phase 1 đến Phase 6.
-- [ ] `.ai/reports/ADS-002-evidence.md` được tạo với đầy đủ thông tin chi tiết: Traceability Matrix, Test Suite execution logs, Smoke flow logs, Security invariant verifications, và Known Limitations.
-- [ ] Bộ test tự động `pytest` (tất cả các unit, integration, API, executor, UI tests) vượt qua 100% không có lỗi.
-- [ ] Lệnh kiểm tra biên dịch `python3 -m compileall src tests scripts` thực thi không có lỗi cú pháp.
-- [ ] Script `PYTHONPATH=src:. python3 scripts/smoke_ui_check.py` chạy thành công.
-- [ ] Script `PYTHONPATH=src:. python3 scripts/smoke_conversation_flow.py` chạy thành công toàn bộ kịch bản E2E.
-- [ ] `git diff --check` sạch sẽ, không có trailing whitespace hay conflict markers.
+- [x] `README.md` phản ánh đầy đủ kiến trúc hội thoại mới, cách sử dụng Always-on Chatbot, workflow duyệt kế hoạch/nguồn, và hướng dẫn chạy smoke test.
+- [x] `CAPABILITY_MAP.md` và `.ai/specs/ADS-002/CAPABILITY_MAP.md` được cập nhật đầy đủ thông tin về ADS-002.
+- [x] `.ai/specs/ADS-002/requirements.md` có Status `COMPLETED` và 9/9 tiêu chí nghiệm thu được đánh dấu `[x]`.
+- [x] `.ai/specs/ADS-002/tasks.md` được đánh dấu hoàn thành toàn bộ các Phase 1 đến Phase 6.
+- [x] `.ai/reports/ADS-002-evidence.md` được tạo với đầy đủ thông tin chi tiết: Traceability Matrix, Test Suite execution logs, Smoke flow logs, Security invariant verifications, và Known Limitations.
+- [x] Bộ test tự động `pytest` (tất cả các unit, integration, API, executor, UI tests) vượt qua 100% không có lỗi.
+- [x] Lệnh kiểm tra biên dịch `python3 -m compileall src tests scripts` thực thi không có lỗi cú pháp.
+- [x] Script `PYTHONPATH=src:. python3 scripts/smoke_ui_check.py` chạy thành công.
+- [x] Script `PYTHONPATH=src:. python3 scripts/smoke_conversation_flow.py` chạy thành công toàn bộ kịch bản E2E.
+- [x] `git diff --check` sạch sẽ, không có trailing whitespace hay conflict markers.
 
 ---
 

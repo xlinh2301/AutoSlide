@@ -1,5 +1,7 @@
 # Design: Always-on Agent Chat for AutoSlide
 
+**Status:** COMPLETED — Delivered and verified in ADS-002
+
 ## 1. System boundary
 
 ADS-002 adds a conversational orchestration layer above the existing ADS-001 pipeline. The chat layer owns dialogue, clarification, plan approval and provenance. The existing planner/executor/render/quality pipeline remains the only mutation path.
@@ -47,7 +49,7 @@ The public API should be introduced as versioned session endpoints without break
 - `POST /api/v1/sessions/{id}/approve` — approve plan or source set using a typed decision.
 - `POST /api/v1/sessions/{id}/execute` — execute only an approved plan.
 
-The first implementation may use in-memory registry plus job workspace persistence, matching ADS-001; a later persistence backend can replace internals without changing the contract.
+The first implementation uses in-memory registry plus job workspace persistence, matching ADS-001; a later persistence backend can replace internals without changing the contract.
 
 ## 4. Content and research policy
 

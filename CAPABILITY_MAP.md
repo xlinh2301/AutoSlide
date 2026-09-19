@@ -2,41 +2,61 @@
 
 ## Product scope
 
-AutoSlide is a local-first application that accepts a PowerPoint template and a natural-language update request, edits the existing presentation while preserving its visual and structural intent, verifies the result, and returns a completed editable `.pptx`.
+AutoSlide is a local-first application that accepts a PowerPoint template and natural-language instructions, edits the existing presentation while preserving its visual and structural intent, verifies the result through structural and visual quality gates, and returns a completed editable `.pptx`.
 
-The MVP intentionally does not load DOCX, XLSX, PDF or external reference documents. Those inputs are deferred until the template-preserving PPTX editing path is reliable.
+With **ADS-002**, AutoSlide adds an always-on conversational chatbot rail supporting multi-turn dialogue, clarification questions, plan and web source approvals, safe deck operations, provenance tracking, and follow-up turns against current checkpoints.
 
 ## Capability boundaries
 
-| Module ID | Responsibility | Depends on | Delivery phase |
+| Module ID | Responsibility | Depends on | Delivery status |
 |---|---|---|---|
-| `foundation-runtime` | Local app bootstrap, job workspace, configuration, runtime detection and CLI adapters | — | 1 |
-| `pptx-ingest` | PPTX package inspection, object inventory, thumbnails and stable target references | `foundation-runtime` | 2 |
-| `edit-planner` | Natural-language instruction parsing and typed, scope-constrained edit plan | `pptx-ingest`, `foundation-runtime` | 3 |
-| `pptx-executor` | Deterministic text/style/layout edits with preservation rules | `edit-planner`, `pptx-ingest` | 4 |
-| `quality-gates` | Structural diff, render, visual QA, repair and approval evidence | `pptx-executor` | 5 |
-| `local-workbench` | Browser UI, job progress, previews, review and download | `foundation-runtime`, `quality-gates` | 6 |
-| `reference-ingestion` | DOCX/XLSX/PDF/image sources, provenance graph and data-grounded updates | `quality-gates`, `local-workbench` | 7 |
-| `cross-platform-packaging` | Linux/macOS/Windows installers, dependency checks and upgrade flow | `foundation-runtime`, `local-workbench` | 8 |
+| `foundation-runtime` | Local app bootstrap, job workspace, configuration, runtime detection and CLI adapters | — | ✅ Delivered (ADS-001) |
+| `pptx-ingest` | PPTX package inspection, object inventory, thumbnails and stable target references | `foundation-runtime` | ✅ Delivered (ADS-001) |
+| `edit-planner` | Natural-language instruction parsing and typed, scope-constrained edit plan | `pptx-ingest`, `foundation-runtime` | ✅ Delivered (ADS-001) |
+| `pptx-executor` | Deterministic text/style/layout edits with preservation rules | `edit-planner`, `pptx-ingest` | ✅ Delivered (ADS-001) |
+| `quality-gates` | Structural diff, render, visual QA, repair and approval evidence | `pptx-executor` | ✅ Delivered (ADS-001) |
+| `local-workbench` | Browser UI, job progress, previews, review and download | `foundation-runtime`, `quality-gates` | ✅ Delivered (ADS-001) |
+| `conversation-foundation` | Stateful chat session, turn history, checkpoint store and event log | `foundation-runtime`, `local-workbench` | ✅ Delivered (ADS-002) |
+| `clarification-planner` | Targeted clarification questions, missing-field brief analysis, plan cards | `conversation-foundation`, `edit-planner` | ✅ Delivered (ADS-002) |
+| `research-provenance` | Runtime-mediated web search, AI generation, source approval, attribution | `conversation-foundation`, `foundation-runtime` | ✅ Delivered (ADS-002) |
+| `deck-operations` | Allowlisted add/delete/duplicate/reorder slides & arbitrary content ops | `edit-planner`, `pptx-executor` | ✅ Delivered (ADS-002) |
+| `chatbot-ui` | Always-on chat rail, interactive cards, selection context binding | `conversation-foundation`, `local-workbench` | ✅ Delivered (ADS-002) |
+| `reference-ingestion` | Reference DOCX/XLSX/PDF file parsing, provenance graph and data updates | `quality-gates`, `chatbot-ui` | ⏳ Planned (ADS-003) |
+| `cross-platform-packaging` | Linux/macOS/Windows installers, dependency checks and upgrade flow | `foundation-runtime`, `chatbot-ui` | ⏳ Planned (ADS-004) |
 
 ## Dependency direction
 
 ```mermaid
-flowchart LR
-  foundation-runtime --> pptx-ingest
-  pptx-ingest --> edit-planner
-  edit-planner --> pptx-executor
-  pptx-executor --> quality-gates
-  foundation-runtime --> local-workbench
-  quality-gates --> local-workbench
-  quality-gates --> reference-ingestion
-  local-workbench --> reference-ingestion
-  foundation-runtime --> cross-platform-packaging
-  local-workbench --> cross-platform-packaging
+flowchart TD
+  subgraph ADS-001 ["ADS-001: Foundation & Deterministic Editing"]
+    foundation-runtime --> pptx-ingest
+    pptx-ingest --> edit-planner
+    edit-planner --> pptx-executor
+    pptx-executor --> quality-gates
+    foundation-runtime --> local-workbench
+    quality-gates --> local-workbench
+  end
+
+  subgraph ADS-002 ["ADS-002: Always-on Agent Chat"]
+    local-workbench --> conversation-foundation
+    conversation-foundation --> clarification-planner
+    clarification-planner --> deck-operations
+    deck-operations --> pptx-executor
+    conversation-foundation --> research-provenance
+    research-provenance --> deck-operations
+    conversation-foundation --> chatbot-ui
+    clarification-planner --> chatbot-ui
+    research-provenance --> chatbot-ui
+  end
+
+  subgraph Future ["Future Extensions"]
+    chatbot-ui --> reference-ingestion
+    chatbot-ui --> cross-platform-packaging
+  end
 ```
 
 ## Build order
 
-`foundation-runtime → pptx-ingest → edit-planner → pptx-executor → quality-gates → local-workbench → reference-ingestion → cross-platform-packaging`
-
-The first releasable vertical slice is: `foundation-runtime + pptx-ingest + edit-planner + pptx-executor + quality-gates`. The UI may be a minimal local job endpoint during early development and becomes a complete workbench in phase 6.
+1. **ADS-001 Foundation**: `foundation-runtime → pptx-ingest → edit-planner → pptx-executor → quality-gates → local-workbench` (Completed).
+2. **ADS-002 Conversational Layer**: `conversation-foundation → clarification-planner → session-api → research-provenance → deck-operations → chatbot-ui` (Completed).
+3. **Future**: `reference-ingestion → cross-platform-packaging`.
