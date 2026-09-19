@@ -49,18 +49,7 @@ class EditBrief(BaseModel):
     complete: bool = False
 
 
-class SourceRecord(BaseModel):
-    """External or research source cited in support of presentation edits."""
-
-    model_config = ConfigDict(frozen=True)
-
-    source_id: str
-    url: str
-    title: str
-    retrieved_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    summary: str = ""
-    claims: list[str] = Field(default_factory=list)
-    approved: bool = False
+from autoslide.content.models import SourceRecord
 
 
 class ConversationSession(BaseModel):

@@ -12,11 +12,11 @@ from pydantic import BaseModel, ConfigDict
 
 REDACTION_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     # Bearer tokens
-    (re.compile(r"(?i)\b(bearer\s+)[A-Za-z0-9_\-\.]+"), r"\1[REDACTED]"),
-    # Common API-key environment assignments
+    (re.compile(r"(?i)\b(bearer[\s\-]+)[A-Za-z0-9_\-\.]+"), r"\1[REDACTED]"),
+    # Common API-key environment assignments and key: value pairs
     (
         re.compile(
-            r"(?i)\b([A-Z0-9_]*(?:API_KEY|ACCESS_TOKEN|SECRET_KEY|TOKEN|PASSWORD|AUTH|CREDENTIALS)[A-Z0-9_]*\s*=\s*)([^\s;&]+)"
+            r"(?i)\b([A-Z0-9_]*(?:API_KEY|ACCESS_TOKEN|SECRET_KEY|TOKEN|PASSWORD|AUTH|CREDENTIALS|API\s+KEY|SECRET)[A-Z0-9_]*\s*[:=]\s*)([^\s;&]+)"
         ),
         r"\1[REDACTED]",
     ),
@@ -27,7 +27,7 @@ REDACTION_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     # Cookie names / values
     (
         re.compile(
-            r"(?i)\b(sessionid|token|auth|cookie|jwt|csrftoken)\s*=\s*([^\s;,\r\n]+)"
+            r"(?i)\b(sessionid|token|auth|cookie|jwt|csrftoken)\s*[:=]\s*([^\s;,\r\n]+)"
         ),
         r"\1=[REDACTED]",
     ),
