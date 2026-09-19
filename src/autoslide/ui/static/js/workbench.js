@@ -382,12 +382,14 @@
 
   function clearChatSelectionContext() {
     chatSelectionContext = {
-      slide_index: activeSlideIndex,
+      slide_index: null,
       object_ref: null,
       selected_text: null,
     };
+    scopeState.region = null;
+    if (selectionRect) selectionRect.style.display = "none";
+    if (regionBadge) regionBadge.style.display = "none";
     if (chatContextBadge) chatContextBadge.style.display = "none";
-    clearRegionSelection();
   }
 
   /* ==========================================================================
@@ -408,11 +410,11 @@
       }
     }
 
-    const payloadContext = customContext || {
-      slide_index: chatSelectionContext.slide_index || activeSlideIndex,
+    const payloadContext = customContext || (chatSelectionContext.slide_index ? {
+      slide_index: chatSelectionContext.slide_index,
       object_ref: chatSelectionContext.object_ref || null,
       selected_text: chatSelectionContext.selected_text || null,
-    };
+    } : null);
 
     // 1. Render User Turn
     renderChatTurn({
