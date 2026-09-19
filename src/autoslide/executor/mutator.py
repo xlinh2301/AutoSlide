@@ -6,11 +6,15 @@ import copy
 import re
 import xml.etree.ElementTree as ET
 
+from autoslide.content.models import ContentBlock
 from autoslide.executor.errors import TargetNotFoundError
-from autoslide.ingest.models import ShapeInventoryItem
+from autoslide.ingest.models import BoundingBox, ShapeInventoryItem
 from autoslide.planner.models import (
+    AddContentOp,
+    AddSlideOp,
     FormatTextOp,
     MoveResizeShapeOp,
+    ReorderSlideOp,
     ReplaceTextOp,
 )
 
@@ -346,5 +350,271 @@ def apply_delete_slide(
             if override.attrib.get("PartName") == f"/{slide_path}":
                 ct_tree.remove(override)
         files["[Content_Types].xml"] = ET.tostring(ct_tree, encoding="utf-8", xml_declaration=True)
+
+    return files
+
+
+def apply_reorder_slide(
+    pkg_files: dict[str, bytes],
+    slide_index: int,
+    new_index: int,
+) -> dict[str, bytes]:
+    """Reorder slide position in presentation.xml p:sldIdLst."""
+    files = dict(pkg_files)
+    pres_tree = ET.fromstring(files["ppt/presentation.xml"])
+    sld_id_lst = pres_tree.find("p:sldIdLst", NS)
+    if sld_id_lst is None:
+        raise TargetNotFoundError("p:sldIdLst not found in presentation.xml")
+
+    slides = sld_id_lst.findall("p:sldId", NS)
+    slide_count = len(slides)
+    if slide_index < 1 or slide_index > slide_count:
+        raise TargetNotFoundError(f"Slide index {slide_index} out of bounds (1..{slide_count})")
+
+    target_elem = slides[slide_index - 1]
+    sld_id_lst.remove(target_elem)
+
+    # Normalize new_index to 1..slide_count
+    if new_index < 1:
+        target_pos = 0
+    elif new_index > slide_count:
+        target_pos = len(sld_id_lst.findall("p:sldId", NS))
+    else:
+        target_pos = new_index - 1
+
+    sld_id_lst.insert(target_pos, target_elem)
+
+    files["ppt/presentation.xml"] = ET.tostring(pres_tree, encoding="utf-8", xml_declaration=True)
+    return files
+
+
+def apply_add_content(
+    pkg_files: dict[str, bytes],
+    target_slide_index: int,
+    content: ContentBlock,
+    bounds: BoundingBox | None = None,
+) -> dict[str, bytes]:
+    """Append a new shape/text block to target slide XML."""
+    supported_types = {"text", "paragraph", "title", "body", "heading", "bullet_list"}
+    if content.block_type not in supported_types:
+        raise ValueError(f"Unsupported content block type: '{content.block_type}'. Must be one of {sorted(supported_types)}.")
+
+    files = dict(pkg_files)
+    slide_path = _get_slide_path(files, target_slide_index)
+    slide_tree = ET.fromstring(files[slide_path])
+
+    sp_tree = slide_tree.find(".//p:spTree", NS)
+    if sp_tree is None:
+        raise TargetNotFoundError(f"p:spTree not found in slide {target_slide_index}")
+
+    existing_shape_ids = []
+    for elem in sp_tree.findall(".//p:cNvPr", NS):
+        try:
+            existing_shape_ids.append(int(elem.attrib.get("id", "0")))
+        except ValueError:
+            pass
+    new_shape_id = (max(existing_shape_ids) if existing_shape_ids else 1) + 1
+    new_shape_name = f"ContentShape {new_shape_id}"
+
+    bx = bounds.x if bounds and bounds.x is not None else 1000000
+    by = bounds.y if bounds and bounds.y is not None else 2000000
+    bcx = bounds.cx if bounds and bounds.cx is not None and bounds.cx > 0 else 10000000
+    bcy = bounds.cy if bounds and bounds.cy is not None and bounds.cy > 0 else 3500000
+
+    sp = ET.SubElement(sp_tree, f"{{{NS['p']}}}sp")
+
+    nv_sp_pr = ET.SubElement(sp, f"{{{NS['p']}}}nvSpPr")
+    ET.SubElement(
+        nv_sp_pr,
+        f"{{{NS['p']}}}cNvPr",
+        {"id": str(new_shape_id), "name": new_shape_name},
+    )
+    ET.SubElement(nv_sp_pr, f"{{{NS['p']}}}cNvSpPr", {"txBox": "1"})
+    ET.SubElement(nv_sp_pr, f"{{{NS['p']}}}nvPr")
+
+    sp_pr = ET.SubElement(sp, f"{{{NS['p']}}}spPr")
+    xfrm = ET.SubElement(sp_pr, f"{{{NS['a']}}}xfrm")
+    ET.SubElement(xfrm, f"{{{NS['a']}}}off", {"x": str(bx), "y": str(by)})
+    ET.SubElement(xfrm, f"{{{NS['a']}}}ext", {"cx": str(bcx), "cy": str(bcy)})
+    prst_geom = ET.SubElement(sp_pr, f"{{{NS['a']}}}prstGeom", {"prst": "rect"})
+    ET.SubElement(prst_geom, f"{{{NS['a']}}}avLst")
+
+    tx_body = ET.SubElement(sp, f"{{{NS['p']}}}txBody")
+    body_pr = ET.SubElement(tx_body, f"{{{NS['a']}}}bodyPr", {"wrap": "square", "rtlCol": "0"})
+    ET.SubElement(body_pr, f"{{{NS['a']}}}spAutoFit")
+    ET.SubElement(tx_body, f"{{{NS['a']}}}lstStyle")
+
+    lines = content.text.split("\n") if content.text else [""]
+    for line in lines:
+        p = ET.SubElement(tx_body, f"{{{NS['a']}}}p")
+        if content.block_type in ("title", "heading"):
+            ET.SubElement(p, f"{{{NS['a']}}}pPr", {"algn": "l"})
+        r = ET.SubElement(p, f"{{{NS['a']}}}r")
+        r_pr = ET.SubElement(r, f"{{{NS['a']}}}rPr")
+        if content.block_type == "title":
+            r_pr.set("sz", "2800")
+            r_pr.set("b", "1")
+        elif content.block_type == "heading":
+            r_pr.set("sz", "2200")
+            r_pr.set("b", "1")
+        t = ET.SubElement(r, f"{{{NS['a']}}}t")
+        t.text = line
+
+    files[slide_path] = ET.tostring(slide_tree, encoding="utf-8", xml_declaration=True)
+    return files
+
+
+def apply_add_slide(
+    pkg_files: dict[str, bytes],
+    source_slide_index: int | None = None,
+    insert_at_index: int = 1,
+    layout_ref: str | None = None,
+    content: list[ContentBlock] | None = None,
+) -> dict[str, bytes]:
+    """Insert a new slide with optional template/layout and initial content blocks."""
+    files = dict(pkg_files)
+
+    existing_slide_nums = [
+        int(m.group(1))
+        for k in files.keys()
+        if (m := re.search(r"ppt/slides/slide(\d+)\.xml$", k))
+    ]
+    new_num = (max(existing_slide_nums) if existing_slide_nums else 0) + 1
+    new_slide_path = f"ppt/slides/slide{new_num}.xml"
+    new_rels_path = f"ppt/slides/_rels/slide{new_num}.xml.rels"
+
+    if source_slide_index is not None:
+        src_slide_path = _get_slide_path(files, source_slide_index)
+        files[new_slide_path] = files[src_slide_path]
+        src_rels = src_slide_path.replace("ppt/slides/", "ppt/slides/_rels/") + ".rels"
+        if src_rels in files:
+            files[new_rels_path] = files[src_rels]
+    else:
+        found_rels = None
+        for k in files.keys():
+            if re.match(r"^ppt/slides/_rels/slide\d+\.xml\.rels$", k):
+                found_rels = files[k]
+                break
+
+        if found_rels is not None:
+            files[new_rels_path] = found_rels
+        else:
+            rels_root = ET.Element(f"{{{NS['pr']}}}Relationships")
+            ET.SubElement(
+                rels_root,
+                f"{{{NS['pr']}}}Relationship",
+                {
+                    "Id": "rId1",
+                    "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout",
+                    "Target": "../slideLayouts/slideLayout1.xml",
+                },
+            )
+            files[new_rels_path] = ET.tostring(rels_root, encoding="utf-8", xml_declaration=True)
+
+        minimal_xml = (
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+            '<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '
+            'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '
+            'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">\n'
+            '  <p:cSld>\n'
+            '    <p:spTree>\n'
+            '      <p:nvGrpSpPr>\n'
+            '        <p:cNvPr id="1" name=""/>\n'
+            '        <p:cNvGrpSpPr/>\n'
+            '        <p:nvPr/>\n'
+            '      </p:nvGrpSpPr>\n'
+            '      <p:grpSpPr>\n'
+            '        <a:xfrm>\n'
+            '          <a:off x="0" y="0"/>\n'
+            '          <a:ext cx="0" cy="0"/>\n'
+            '          <a:chOff x="0" y="0"/>\n'
+            '          <a:chExt cx="0" cy="0"/>\n'
+            '        </a:xfrm>\n'
+            '      </p:grpSpPr>\n'
+            '    </p:spTree>\n'
+            '  </p:cSld>\n'
+            '  <p:clrMapOvr>\n'
+            '    <a:masterClrMapping/>\n'
+            '  </p:clrMapOvr>\n'
+            '</p:sld>'
+        )
+        files[new_slide_path] = minimal_xml.encode("utf-8")
+
+    pres_tree = ET.fromstring(files["ppt/presentation.xml"])
+    sld_id_lst = pres_tree.find("p:sldIdLst", NS)
+    if sld_id_lst is None:
+        sld_id_lst = ET.SubElement(pres_tree, f"{{{NS['p']}}}sldIdLst")
+
+    existing_ids = [int(s.attrib.get("id", 255)) for s in sld_id_lst.findall("p:sldId", NS)]
+    new_id = (max(existing_ids) if existing_ids else 255) + 1
+
+    rels_tree = ET.fromstring(files["ppt/_rels/presentation.xml.rels"])
+    existing_r_nums = [
+        int(m.group(1))
+        for r in rels_tree
+        if (m := re.search(r"rId(\d+)$", r.attrib.get("Id", "")))
+    ]
+    new_r_num = (max(existing_r_nums) if existing_r_nums else 0) + 1
+    new_r_id = f"rId{new_r_num}"
+
+    ET.SubElement(
+        rels_tree,
+        f"{{{NS['pr']}}}Relationship",
+        {
+            "Id": new_r_id,
+            "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide",
+            "Target": f"slides/slide{new_num}.xml",
+        },
+    )
+    files["ppt/_rels/presentation.xml.rels"] = ET.tostring(rels_tree, encoding="utf-8", xml_declaration=True)
+
+    new_sld_id = ET.Element(
+        f"{{{NS['p']}}}sldId",
+        {
+            "id": str(new_id),
+            f"{{{NS['r']}}}id": new_r_id,
+        },
+    )
+
+    all_slds = sld_id_lst.findall("p:sldId", NS)
+    if insert_at_index is not None and 1 <= insert_at_index <= len(all_slds) + 1:
+        sld_id_lst.insert(insert_at_index - 1, new_sld_id)
+        effective_slide_index = insert_at_index
+    elif insert_at_index is not None and insert_at_index < 1:
+        sld_id_lst.insert(0, new_sld_id)
+        effective_slide_index = 1
+    else:
+        sld_id_lst.append(new_sld_id)
+        effective_slide_index = len(all_slds) + 1
+
+    files["ppt/presentation.xml"] = ET.tostring(pres_tree, encoding="utf-8", xml_declaration=True)
+
+    ct_tree = ET.fromstring(files["[Content_Types].xml"])
+    ET.SubElement(
+        ct_tree,
+        f"{{{NS['ct']}}}Override",
+        {
+            "PartName": f"/{new_slide_path}",
+            "ContentType": "application/vnd.openxmlformats-officedocument.presentationml.slide+xml",
+        },
+    )
+    files["[Content_Types].xml"] = ET.tostring(ct_tree, encoding="utf-8", xml_declaration=True)
+
+    if content:
+        y_offset = 1200000
+        for block in content:
+            block_bounds = BoundingBox(
+                x=1000000,
+                y=y_offset,
+                cx=10000000,
+                cy=1800000 if block.block_type in ("title", "heading") else 2500000,
+            )
+            files = apply_add_content(
+                files,
+                target_slide_index=effective_slide_index,
+                content=block,
+                bounds=block_bounds,
+            )
+            y_offset += 2600000
 
     return files

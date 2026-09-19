@@ -15,10 +15,13 @@ from autoslide.executor.errors import (
 )
 from autoslide.executor.models import ExecutionResult
 from autoslide.executor.mutator import (
+    apply_add_content,
+    apply_add_slide,
     apply_delete_slide,
     apply_duplicate_slide,
     apply_format_text,
     apply_move_resize,
+    apply_reorder_slide,
     apply_replace_text,
 )
 from autoslide.ingest.models import DeckInventory, ShapeInventoryItem
@@ -26,10 +29,13 @@ from autoslide.ingest.parser import PPTXIngestor
 from autoslide.ingest.validator import validate_pptx_package
 from autoslide.jobs.workspace import JobWorkspace
 from autoslide.planner.models import (
+    AddContentOp,
+    AddSlideOp,
     DeleteSlideOp,
     DuplicateSlideOp,
     FormatTextOp,
     MoveResizeShapeOp,
+    ReorderSlideOp,
     ReplaceTextOp,
     TaskPlan,
 )
@@ -101,23 +107,34 @@ class PPTXExecutor:
                     target_slide = op.target.slide_index
                     target_ref = op.target.object_ref
 
-                    if target_ref is None or (target_slide, target_ref) not in baseline_shape_map:
+                    if target_ref is None:
                         raise TargetNotFoundError(
                             f"Target object_ref '{target_ref}' not found on slide {target_slide}"
                         )
 
-                    shape_id, shape_name = baseline_shape_map[(target_slide, target_ref)]
+                    if (target_slide, target_ref) in baseline_shape_map:
+                        shape_id, shape_name = baseline_shape_map[(target_slide, target_ref)]
+                    else:
+                        shape_id, shape_name = target_ref, target_ref
 
-                    # Search current inventory for matching shape_id or shape_name
+                    # Search current inventory for matching shape_id, shape_name, or fingerprint
                     for s in current_inventory.slides:
                         if s.slide_index == target_slide:
                             for sh in s.shapes:
-                                if (shape_id and sh.shape_id == shape_id) or (shape_name and sh.shape_name == shape_name):
+                                if (
+                                    (shape_id and sh.shape_id == shape_id)
+                                    or (shape_name and sh.shape_name == shape_name)
+                                    or (target_ref and sh.fingerprint == target_ref)
+                                ):
                                     shape_info = sh
                                     break
                                 if sh.children:
                                     for child in sh.children:
-                                        if (shape_id and child.shape_id == shape_id) or (shape_name and child.shape_name == shape_name):
+                                        if (
+                                            (shape_id and child.shape_id == shape_id)
+                                            or (shape_name and child.shape_name == shape_name)
+                                            or (target_ref and child.fingerprint == target_ref)
+                                        ):
                                             shape_info = child
                                             break
                             if shape_info is not None:
@@ -139,13 +156,58 @@ class PPTXExecutor:
                     assert shape_info is not None
                     pkg_files = apply_move_resize(pkg_files, op, shape_info)
                 elif isinstance(op, DuplicateSlideOp):
+                    if op.source_slide_index < 1 or op.source_slide_index > current_inventory.slide_count:
+                        raise TargetNotFoundError(
+                            f"Source slide index {op.source_slide_index} out of bounds (1..{current_inventory.slide_count})"
+                        )
                     pkg_files = apply_duplicate_slide(
                         pkg_files,
                         source_slide_index=op.source_slide_index,
                         insert_at_index=op.insert_at_index,
                     )
                 elif isinstance(op, DeleteSlideOp):
+                    if op.slide_index < 1 or op.slide_index > current_inventory.slide_count:
+                        raise TargetNotFoundError(
+                            f"Slide index {op.slide_index} out of bounds (1..{current_inventory.slide_count})"
+                        )
                     pkg_files = apply_delete_slide(pkg_files, slide_index=op.slide_index)
+                elif isinstance(op, AddSlideOp):
+                    if op.source_slide_index is not None and (
+                        op.source_slide_index < 1 or op.source_slide_index > current_inventory.slide_count
+                    ):
+                        raise TargetNotFoundError(
+                            f"Source slide index {op.source_slide_index} out of bounds (1..{current_inventory.slide_count})"
+                        )
+                    pkg_files = apply_add_slide(
+                        pkg_files,
+                        source_slide_index=op.source_slide_index,
+                        insert_at_index=op.insert_at_index,
+                        layout_ref=op.layout_ref,
+                        content=op.content,
+                    )
+                elif isinstance(op, ReorderSlideOp):
+                    if op.slide_index < 1 or op.slide_index > current_inventory.slide_count:
+                        raise TargetNotFoundError(
+                            f"Slide index {op.slide_index} out of bounds (1..{current_inventory.slide_count})"
+                        )
+                    pkg_files = apply_reorder_slide(
+                        pkg_files,
+                        slide_index=op.slide_index,
+                        new_index=op.new_index,
+                    )
+                elif isinstance(op, AddContentOp):
+                    if op.target_slide_index < 1 or op.target_slide_index > current_inventory.slide_count:
+                        raise TargetNotFoundError(
+                            f"Target slide index {op.target_slide_index} out of bounds (1..{current_inventory.slide_count})"
+                        )
+                    pkg_files = apply_add_content(
+                        pkg_files,
+                        target_slide_index=op.target_slide_index,
+                        content=op.content,
+                        bounds=op.bounds,
+                    )
+                else:
+                    raise ExecutorError(f"Unsupported operation type: {type(op).__name__}")
 
                 # Write mutated package to working copy
                 with zipfile.ZipFile(working_pptx, "w") as out_zf:

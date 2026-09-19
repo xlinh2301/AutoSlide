@@ -14,6 +14,9 @@ class OperationType(str, Enum):
     MOVE_RESIZE_SHAPE = "move_resize_shape"
     DUPLICATE_SLIDE = "duplicate_slide"
     DELETE_SLIDE = "delete_slide"
+    ADD_SLIDE = "add_slide"
+    REORDER_SLIDE = "reorder_slide"
+    ADD_CONTENT = "add_content"
 
 
 class PreservationRuleType(str, Enum):

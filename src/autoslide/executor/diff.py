@@ -50,7 +50,7 @@ class StructuralDiffEngine:
                     old_value=None,
                     new_value=s_after.slide_path,
                 )
-                if s_idx in scoped_slides or any(op.op.value == "duplicate_slide" for op in plan.operations):
+                if s_idx in scoped_slides or any(op.op.value in ("duplicate_slide", "add_slide") for op in plan.operations):
                     intended_changes.append(change)
                 else:
                     unintended_changes.append(change)

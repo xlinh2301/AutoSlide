@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Annotated, Any, Literal, Union
 from pydantic import BaseModel, Field
 
+from autoslide.ingest.models import BoundingBox
 from autoslide.planner.vocabulary import OperationType
 
 
@@ -21,6 +22,9 @@ class TargetScope(BaseModel):
 
     slide_index: int
     object_ref: str | None = None
+
+
+from autoslide.content.models import ContentBlock
 
 
 class BoundingBoxUpdate(BaseModel):
@@ -91,6 +95,33 @@ class DeleteSlideOp(BaseOperation):
     slide_index: int
 
 
+class AddSlideOp(BaseOperation):
+    """Operation inserting a new slide with optional layout and initial content blocks."""
+
+    op: Literal[OperationType.ADD_SLIDE] = OperationType.ADD_SLIDE
+    source_slide_index: int | None = None
+    insert_at_index: int = 1
+    layout_ref: str | None = None
+    content: list[ContentBlock] = Field(default_factory=list)
+
+
+class ReorderSlideOp(BaseOperation):
+    """Operation changing slide sequence order from slide_index to new_index."""
+
+    op: Literal[OperationType.REORDER_SLIDE] = OperationType.REORDER_SLIDE
+    slide_index: int
+    new_index: int
+
+
+class AddContentOp(BaseOperation):
+    """Operation appending arbitrary supported content block to a slide."""
+
+    op: Literal[OperationType.ADD_CONTENT] = OperationType.ADD_CONTENT
+    target_slide_index: int
+    content: ContentBlock
+    bounds: BoundingBox | None = None
+
+
 EditOperation = Annotated[
     Union[
         ReplaceTextOp,
@@ -99,6 +130,9 @@ EditOperation = Annotated[
         MoveResizeShapeOp,
         DuplicateSlideOp,
         DeleteSlideOp,
+        AddSlideOp,
+        ReorderSlideOp,
+        AddContentOp,
     ],
     Field(discriminator="op"),
 ]
