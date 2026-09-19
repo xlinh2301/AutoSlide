@@ -80,3 +80,14 @@ class ProvenanceRecord(BaseModel):
     origin: ContentOrigin
     destination: TargetReference
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class ContentBlock(BaseModel):
+    """Arbitrary supported or typed content item for slide insertion and deck structuring."""
+
+    model_config = ConfigDict(frozen=True)
+
+    block_type: str = "text"
+    text: str = ""
+    origin: ContentOrigin | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)

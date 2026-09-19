@@ -11,13 +11,13 @@ from autoslide.content.models import (
     SourceRecord,
 )
 from autoslide.events import Redactor
-from autoslide.planner.models import TargetScope, TaskPlan
 from autoslide.runtime.adapters import AntigravityAdapter
 from autoslide.runtime.base import RuntimeAdapter
 
 if TYPE_CHECKING:
     from autoslide.conversation.models import ConversationSession
     from autoslide.conversation.provenance import ProvenanceStore
+    from autoslide.planner.models import TargetScope, TaskPlan
 
 
 class ResearchService:
