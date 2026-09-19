@@ -2,7 +2,7 @@
 id: SDD-SUB-20260919-18
 title: Release Gate, Final Documentation & Full Evidence Verification
 author: agent-release-gate
-status: DRAFT # DRAFT | REVIEW | APPROVED | MERGED
+status: APPROVED # DRAFT | REVIEW | APPROVED | MERGED
 main_spec: "[[.ai/specs/ADS-002/requirements.md]]"
 summary: "Execute final release gate for ADS-002 Always-on Agent Chat: compile comprehensive evidence verification report, update README and capability documentation, verify end-to-end test suites and safety invariants, and advance spec statuses to COMPLETED."
 decisions:
