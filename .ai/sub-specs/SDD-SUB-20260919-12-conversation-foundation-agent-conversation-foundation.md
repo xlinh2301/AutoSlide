@@ -2,7 +2,7 @@
 id: SDD-SUB-20260919-12
 title: Conversation Domain Models, State Transitions, and JSON Checkpoint Store
 author: agent-conversation-foundation
-status: DRAFT # DRAFT | REVIEW | APPROVED | MERGED
+status: COMPLETED # DRAFT | REVIEW | APPROVED | MERGED | COMPLETED
 main_spec: "[[.ai/specs/ADS-002/requirements.md]]"
 summary: "Implement immutable Pydantic conversation domain models (ConversationState, ChatTurn, EditBrief, SourceRecord, ConversationSession), valid state machine transition rules, and atomic JSON checkpoint persistence in SessionStore."
 decisions: 
@@ -28,7 +28,7 @@ risk_level: LOW
 > [!ABSTRACT] Tóm tắt cho AI
 > **Mục tiêu**: Hiện thực hóa domain models cho hội thoại (ConversationState, ChatTurn, EditBrief, SourceRecord, ConversationSession), bộ quy tắc chuyển trạng thái state machine chặt chẽ, và module SessionStore lưu trữ checkpoint JSON atomic an toàn không chứa credentials.
 > **Quyết định then chốt**: Sử dụng Pydantic v2 immutable models; Bảng chuyển đổi trạng thái tường minh ném ValueError khi sai luật; SessionStore ghi atomic file và khử credential nhạy cảm khi serialize.
-> **Rủi ro**: #risk/LOW | **Trạng thái**: #status/DRAFT
+> **Rủi ro**: #risk/LOW | **Trạng thái**: #status/COMPLETED
 
 ---
 
@@ -55,11 +55,11 @@ Hiện thực hóa Task 1 của kế hoạch Always-on Agent Chat (`ADS-002`):
 
 ## 2. Giả định & Rủi ro (Assumptions & Risks)
 
-- [ ] **Giả định**: `TargetScope` và `TaskPlan` đã có sẵn tại `autoslide.planner.models` và tương thích Pydantic v2.
-- [ ] **Giả định**: Thư mục lưu checkpoint có thể cấu hình được theo session hoặc job workspace (`job_id` hoặc thư mục workspace định sẵn).
-- [ ] **Rủi ro**: Việc serialize `TaskPlan` và các model lồng nhau sang JSON có thể gặp vấn đề nếu không cấu hình encoder chuẩn Pydantic v2 (`model_dump_json`).
+- [x] **Giả định**: `TargetScope` và `TaskPlan` đã có sẵn tại `autoslide.planner.models` và tương thích Pydantic v2.
+- [x] **Giả định**: Thư mục lưu checkpoint có thể cấu hình được theo session hoặc job workspace (`job_id` hoặc thư mục workspace định sẵn).
+- [x] **Rủi ro**: Việc serialize `TaskPlan` và các model lồng nhau sang JSON có thể gặp vấn đề nếu không cấu hình encoder chuẩn Pydantic v2 (`model_dump_json`).
   - *Biện pháp*: Dùng chuẩn `model_dump_json()` và `model_validate_json()` của Pydantic v2.
-- [ ] **`[UNKNOWN]`**: [UNKNOWN: Vị trí mặc định của checkpoint khi `job_id` chưa được khởi tạo lúc session mới tạo]
+- [x] **`[UNKNOWN]`**: [UNKNOWN: Vị trí mặc định của checkpoint khi `job_id` chưa được khởi tạo lúc session mới tạo]
   - *Giải pháp đề xuất*: Lưu trong thư mục `.autoslide/sessions/{session_id}/checkpoint.json` hoặc thư mục cấu hình truyền vào `SessionStore(storage_dir=...)`.
 
 ---
@@ -84,13 +84,13 @@ Hiện thực hóa Task 1 của kế hoạch Always-on Agent Chat (`ADS-002`):
 
 ## 4. Tiêu chí Chấp nhận (Acceptance Criteria)
 
-- [ ] `ConversationSession.new("session-1")` khởi tạo mặc định ở trạng thái `ConversationState.NEEDS_CLARIFICATION`.
-- [ ] Chuyển trạng thái bất hợp lệ (ví dụ `session.transition(ConversationState.COMPLETED)`) bị từ chối và ném `ValueError`.
-- [ ] Các chuyển trạng thái hợp lệ (ví dụ: `NEEDS_CLARIFICATION -> READY_FOR_PLAN`, `READY_FOR_PLAN -> WAITING_PLAN_APPROVAL`, `WAITING_PLAN_APPROVAL -> READY_FOR_EXECUTION` hoặc `RESEARCHING`, v.v.) hoạt động chính xác.
-- [ ] `SessionStore.save()` ghi checkpoint JSON an toàn (atomic write) vào thư mục workspace/sessions.
-- [ ] Checkpoint reload qua `SessionStore.get()` phục hồi chính xác trạng thái, turns, brief, plan, sources mà không làm mất tính toàn vẹn dữ liệu.
-- [ ] Dữ liệu nhạy cảm (ví dụ chuỗi chứa `api_key`, `token`, `secret`, `password`) được redact sạch sẽ khi serialize checkpoint.
-- [ ] Toàn bộ test trong `tests/conversation/test_models.py` và `tests/conversation/test_state.py` chạy qua 100%.
+- [x] `ConversationSession.new("session-1")` khởi tạo mặc định ở trạng thái `ConversationState.NEEDS_CLARIFICATION`.
+- [x] Chuyển trạng thái bất hợp lệ (ví dụ `session.transition(ConversationState.COMPLETED)`) bị từ chối và ném `ValueError`.
+- [x] Các chuyển trạng thái hợp lệ (ví dụ: `NEEDS_CLARIFICATION -> READY_FOR_PLAN`, `READY_FOR_PLAN -> WAITING_PLAN_APPROVAL`, `WAITING_PLAN_APPROVAL -> READY_FOR_EXECUTION` hoặc `RESEARCHING`, v.v.) hoạt động chính xác.
+- [x] `SessionStore.save()` ghi checkpoint JSON an toàn (atomic write) vào thư mục workspace/sessions.
+- [x] Checkpoint reload qua `SessionStore.get()` phục hồi chính xác trạng thái, turns, brief, plan, sources mà không làm mất tính toàn vẹn dữ liệu.
+- [x] Dữ liệu nhạy cảm (ví dụ chuỗi chứa `api_key`, `token`, `secret`, `password`) được redact sạch sẽ khi serialize checkpoint.
+- [x] Toàn bộ test trong `tests/conversation/test_models.py` và `tests/conversation/test_state.py` chạy qua 100% (13/13 passed).
 
 ---
 
