@@ -1,8 +1,11 @@
 /**
- * AutoSlide Studio Client JS — Canvas-First Architecture
+ * AutoSlide Studio Client JS — Canvas-First Architecture & Always-On Chatbot (ADS-002)
  * Pure Vanilla ES6, Zero External Dependencies.
  *
  * Features:
+ * - Always-on Chatbot Rail with Multi-turn Dialogue (/api/v1/sessions)
+ * - Interactive Cards: QuestionCard, PlanCard, SourceCard, ExecutionCard, ReviewCard, ErrorCard
+ * - Selection Context Binding from Canvas Region Drag & Filmstrip Navigator
  * - Immediate Ingest State upon PPTX file selection
  * - Robust Preview Artifact Loading with Retry & Error Fallbacks
  * - Slide Filmstrip Navigator with Modified Badges
@@ -16,10 +19,19 @@
 (function () {
   // Application State
   let currentJobId = null;
+  let activeSessionId = null;
   let pollingInterval = null;
   let selectedFile = null;
   let previewDiffData = null;
   let activeSlideIndex = 1;
+  let isChatBusy = false;
+
+  // Selection Context State for Chat
+  let chatSelectionContext = {
+    slide_index: 1,
+    object_ref: null,
+    selected_text: null,
+  };
 
   // Scope State: "slide", "region", "deck"
   const scopeState = {
@@ -99,22 +111,42 @@
   const findingsEmpty = document.getElementById("findingsEmpty");
   const qaStatusTag = document.getElementById("qaStatusTag");
 
-  // Action Bar
+  // Action Bar (Human Review)
   const actionBar = document.getElementById("actionBar");
   const btnApprove = document.getElementById("btnApprove");
   const btnReject = document.getElementById("btnReject");
   const btnRepair = document.getElementById("btnRepair");
 
-  // Store URLs for retrying
+  // Chatbot Rail Elements (ADS-002)
+  const chatRail = document.getElementById("chatRail");
+  const chatHeader = document.getElementById("chatHeader");
+  const chatHeaderStatus = document.getElementById("chatHeaderStatus");
+  const chatStatusText = document.getElementById("chatStatusText");
+  const chatMessages = document.getElementById("chatMessages");
+  const chatComposer = document.getElementById("chatComposer");
+  const chatInput = document.getElementById("chatInput");
+  const btnSendChat = document.getElementById("btnSendChat");
+  const chatContextBadge = document.getElementById("chatContextBadge");
+  const chatContextLabel = document.getElementById("chatContextLabel");
+  const btnClearChatContext = document.getElementById("btnClearChatContext");
+
+  // Local URL caches & Retry management
   let currentBeforeUrl = null;
   let currentAfterUrl = null;
+  let beforeRetryCount = 0;
+  let afterRetryCount = 0;
+  const MAX_IMAGE_RETRIES = 5;
 
-  // Initialize on DOM Ready
-  window.addEventListener("DOMContentLoaded", () => {
+  /* ==========================================================================
+     Initialization
+     ========================================================================== */
+  document.addEventListener("DOMContentLoaded", () => {
     initRuntimes();
     setupEventListeners();
     setupRegionSelection();
+    setupChatListeners();
     updateScopeUI();
+    updateChatSelectionContext({ slide_index: activeSlideIndex });
   });
 
   /* ==========================================================================
@@ -223,10 +255,31 @@
     if (btnRepair) btnRepair.addEventListener("click", () => submitDecision("repair"));
   }
 
+  function setupChatListeners() {
+    if (btnSendChat) {
+      btnSendChat.addEventListener("click", () => {
+        if (chatInput) sendChatMessage(chatInput.value.trim());
+      });
+    }
+
+    if (chatInput) {
+      chatInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          sendChatMessage(chatInput.value.trim());
+        }
+      });
+    }
+
+    if (btnClearChatContext) {
+      btnClearChatContext.addEventListener("click", clearChatSelectionContext);
+    }
+  }
+
   /* ==========================================================================
-     File Selection & Immediate Ingestion State
+     File Selection & Session Management
      ========================================================================== */
-  function handleFileSelect(file) {
+  async function handleFileSelect(file) {
     if (!file.name.toLowerCase().endsWith(".pptx")) {
       alert("Please select a valid PowerPoint (.pptx) file.");
       return;
@@ -257,7 +310,7 @@
       beforeIngestState.style.display = "flex";
       if (ingestDeckTitle) ingestDeckTitle.textContent = file.name;
       if (ingestDeckSubtitle) {
-        ingestDeckSubtitle.textContent = `Size: ${formattedSize} • Template ready for editing. Enter an instruction prompt to execute.`;
+        ingestDeckSubtitle.textContent = `Size: ${formattedSize} • Template ready for editing. Enter a prompt or chat with Agent.`;
       }
     }
 
@@ -268,6 +321,574 @@
     }
 
     appendTimelineEvent("INGEST", `Template selected: ${file.name} (${formattedSize})`);
+
+    // 4. Initialize Conversational Session (ADS-002)
+    await createSessionForFile(file);
+  }
+
+  async function createSessionForFile(file) {
+    const formData = new FormData();
+    formData.append("template", file);
+
+    try {
+      if (chatStatusText) chatStatusText.textContent = "Creating session...";
+      const res = await fetch("/api/v1/sessions", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to create conversation session");
+      }
+
+      const data = await res.json();
+      activeSessionId = data.session_id;
+      if (data.job_id) {
+        currentJobId = data.job_id;
+      }
+
+      if (chatStatusText) chatStatusText.textContent = "Session Active";
+      appendTimelineEvent("SESSION_CREATED", `Conversational session ${activeSessionId} initialized for ${file.name}`);
+
+      renderChatTurn({
+        role: "assistant",
+        content: `📁 **${file.name}** uploaded successfully. Tell me what changes or slide outcomes you'd like to achieve!`,
+      });
+    } catch (e) {
+      console.warn("Session creation error:", e);
+      if (chatStatusText) chatStatusText.textContent = "Session Error";
+    }
+  }
+
+  /* ==========================================================================
+     Selection Context Binding (ADS-002)
+     ========================================================================== */
+  function updateChatSelectionContext(ctx) {
+    chatSelectionContext = { ...chatSelectionContext, ...ctx };
+
+    if (!chatContextBadge || !chatContextLabel) return;
+
+    if (chatSelectionContext.selected_text) {
+      chatContextLabel.textContent = `Slide ${chatSelectionContext.slide_index || 1} (${chatSelectionContext.selected_text})`;
+      chatContextBadge.style.display = "inline-flex";
+    } else if (chatSelectionContext.slide_index) {
+      chatContextLabel.textContent = `Slide ${chatSelectionContext.slide_index}`;
+      chatContextBadge.style.display = "inline-flex";
+    } else {
+      chatContextBadge.style.display = "none";
+    }
+  }
+
+  function clearChatSelectionContext() {
+    chatSelectionContext = {
+      slide_index: activeSlideIndex,
+      object_ref: null,
+      selected_text: null,
+    };
+    if (chatContextBadge) chatContextBadge.style.display = "none";
+    clearRegionSelection();
+  }
+
+  /* ==========================================================================
+     Chatbot Rail Message Handling & Card Rendering (ADS-002)
+     ========================================================================== */
+  async function sendChatMessage(messageText, customContext = null) {
+    if (!messageText || isChatBusy) return;
+
+    if (!activeSessionId) {
+      if (selectedFile) {
+        await createSessionForFile(selectedFile);
+      } else {
+        renderChatTurn({
+          role: "assistant",
+          content: "⚠️ Please select or upload a .pptx presentation template first so I know which deck to edit.",
+        });
+        return;
+      }
+    }
+
+    const payloadContext = customContext || {
+      slide_index: chatSelectionContext.slide_index || activeSlideIndex,
+      object_ref: chatSelectionContext.object_ref || null,
+      selected_text: chatSelectionContext.selected_text || null,
+    };
+
+    // 1. Render User Turn
+    renderChatTurn({
+      role: "user",
+      content: messageText,
+      context: payloadContext,
+    });
+
+    if (chatInput) chatInput.value = "";
+    isChatBusy = true;
+    if (btnSendChat) btnSendChat.disabled = true;
+    if (chatStatusText) chatStatusText.textContent = "Thinking...";
+
+    // 2. Render Temporary Loading Turn
+    const loadingTurnEl = renderLoadingTurn();
+
+    try {
+      const res = await fetch(`/api/v1/sessions/${activeSessionId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: messageText,
+          selection_context: payloadContext,
+        }),
+      });
+
+      if (loadingTurnEl && loadingTurnEl.parentNode) {
+        loadingTurnEl.parentNode.removeChild(loadingTurnEl);
+      }
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Error communicating with Agent backend");
+      }
+
+      const respData = await res.json();
+      if (respData.session && respData.session.state) {
+        updateStepper(respData.session.state);
+      }
+
+      // 3. Render Assistant Response & Cards
+      renderChatTurn({
+        role: "assistant",
+        content: respData.assistant_message,
+        cards: respData.cards || [],
+      });
+    } catch (e) {
+      if (loadingTurnEl && loadingTurnEl.parentNode) {
+        loadingTurnEl.parentNode.removeChild(loadingTurnEl);
+      }
+
+      renderChatTurn({
+        role: "assistant",
+        content: "I ran into an issue while processing your request.",
+        cards: [{ type: "error", message: e.message }],
+      });
+    } finally {
+      isChatBusy = false;
+      if (btnSendChat) btnSendChat.disabled = false;
+      if (chatStatusText) chatStatusText.textContent = "Ready";
+      if (chatMessages) chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+  }
+
+  function renderLoadingTurn() {
+    if (!chatMessages) return null;
+    const turnEl = document.createElement("div");
+    turnEl.className = "chat-turn turn-assistant";
+    turnEl.innerHTML = `
+      <div class="turn-avatar">🤖</div>
+      <div class="turn-bubble">
+        <div class="turn-loading-indicator">
+          <span class="spinner" style="width:12px;height:12px;"></span> Agent is reasoning...
+        </div>
+      </div>
+    `;
+    chatMessages.appendChild(turnEl);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+    return turnEl;
+  }
+
+  function renderChatTurn(turn) {
+    if (!chatMessages) return;
+
+    const turnEl = document.createElement("div");
+    turnEl.className = `chat-turn turn-${turn.role || "assistant"}`;
+
+    if (turn.role === "user") {
+      let contextHtml = "";
+      if (turn.context && turn.context.selected_text) {
+        contextHtml = `<div class="user-context-pill">🎯 ${turn.context.selected_text}</div>`;
+      } else if (turn.context && turn.context.slide_index) {
+        contextHtml = `<div class="user-context-pill">🎯 Slide ${turn.context.slide_index}</div>`;
+      }
+
+      turnEl.innerHTML = `
+        <div class="turn-bubble">
+          ${contextHtml}
+          <div class="turn-text">${escapeHtml(turn.content)}</div>
+        </div>
+      `;
+    } else {
+      const bubbleEl = document.createElement("div");
+      bubbleEl.className = "turn-bubble";
+
+      const textEl = document.createElement("div");
+      textEl.className = "turn-text";
+      textEl.innerHTML = formatMarkdownText(turn.content || "");
+      bubbleEl.appendChild(textEl);
+
+      // Render Cards attached to this turn
+      if (turn.cards && Array.isArray(turn.cards)) {
+        turn.cards.forEach((c) => {
+          let cardNode = null;
+          const cardType = (c.type || "").toLowerCase();
+          if (cardType === "question") {
+            cardNode = renderQuestionCard(c);
+          } else if (cardType === "plan") {
+            cardNode = renderPlanCard(c);
+          } else if (cardType === "source" || cardType === "sources") {
+            cardNode = renderSourceCard(c);
+          } else if (cardType === "execution") {
+            cardNode = renderExecutionCard(c);
+          } else if (cardType === "review") {
+            cardNode = renderReviewCard(c);
+          } else if (cardType === "error") {
+            cardNode = renderErrorCard(c.message || c.detail || "An error occurred", () => {
+              if (chatInput) sendChatMessage(chatInput.value.trim());
+            });
+          }
+
+          if (cardNode) {
+            bubbleEl.appendChild(cardNode);
+          }
+        });
+      }
+
+      turnEl.innerHTML = `<div class="turn-avatar">🤖</div>`;
+      turnEl.appendChild(bubbleEl);
+    }
+
+    chatMessages.appendChild(turnEl);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+
+  /* --------------------------------------------------------------------------
+     Card Renderers (QuestionCard, PlanCard, SourceCard, ExecutionCard, ReviewCard, ErrorCard)
+     -------------------------------------------------------------------------- */
+  function renderQuestionCard(cardData) {
+    const card = document.createElement("div");
+    card.className = "chat-card card-question";
+
+    const questions = cardData.questions || [];
+    let questionsHtml = "";
+
+    questions.forEach((q) => {
+      let optionsHtml = "";
+      if (q.options && Array.isArray(q.options) && q.options.length > 0) {
+        optionsHtml = `
+          <div class="question-options-list">
+            ${q.options
+              .map(
+                (opt) => `
+              <button type="button" class="question-option-btn" data-choice="${escapeHtml(opt)}">
+                👉 ${escapeHtml(opt)}
+              </button>
+            `
+              )
+              .join("")}
+          </div>
+        `;
+      }
+
+      questionsHtml += `
+        <div class="question-item">
+          <div class="card-title">❓ ${escapeHtml(q.text || q.question || "Clarification needed:")}</div>
+          ${optionsHtml}
+        </div>
+      `;
+    });
+
+    card.innerHTML = `
+      <div class="card-header-row">
+        <span class="card-badge">Clarification</span>
+      </div>
+      ${questionsHtml}
+    `;
+
+    // Wire choice buttons to send answer automatically
+    card.querySelectorAll(".question-option-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const choiceText = btn.getAttribute("data-choice");
+        if (choiceText) {
+          sendChatMessage(choiceText);
+        }
+      });
+    });
+
+    return card;
+  }
+
+  function renderPlanCard(cardData) {
+    const card = document.createElement("div");
+    card.className = "chat-card card-plan";
+
+    const ops = cardData.operations || [];
+    const opsHtml = ops
+      .map(
+        (op) => `
+      <div class="plan-op-item">
+        <span class="plan-op-type">${escapeHtml(op.op_type || op.type || "EDIT")}</span>
+        <span>Slide ${op.target_slide_index || op.slide_index || 1} • ${escapeHtml(op.description || op.rationale || "Modify element")}</span>
+      </div>
+    `
+      )
+      .join("");
+
+    card.innerHTML = `
+      <div class="card-header-row">
+        <span class="card-badge">Plan Proposal</span>
+        <span style="font-size:0.7rem;color:var(--text-muted)">Confidence: ${cardData.confidence ? Math.round(cardData.confidence * 100) + "%" : "High"}</span>
+      </div>
+      <div class="plan-summary-box">
+        <strong>Goal:</strong> ${escapeHtml(cardData.summary || cardData.goal || "Execute proposed slide modifications")}
+      </div>
+      <div class="plan-ops-list">
+        ${opsHtml || '<div style="color:var(--text-muted);font-size:0.75rem;">1 operation scheduled.</div>'}
+      </div>
+      <div class="plan-actions-row">
+        <button type="button" class="btn-approve-plan" id="btnPlanApprove">✓ Approve & Execute</button>
+        <button type="button" class="btn-revise-plan" id="btnPlanRevise">✏ Revise</button>
+      </div>
+    `;
+
+    const btnApproveEl = card.querySelector("#btnPlanApprove");
+    const btnReviseEl = card.querySelector("#btnPlanRevise");
+
+    if (btnApproveEl) {
+      btnApproveEl.addEventListener("click", () => {
+        btnApproveEl.disabled = true;
+        if (btnReviseEl) btnReviseEl.disabled = true;
+        approvePlan(activeSessionId, true);
+      });
+    }
+
+    if (btnReviseEl) {
+      btnReviseEl.addEventListener("click", () => {
+        if (chatInput) {
+          chatInput.value = "Please revise the plan: ";
+          chatInput.focus();
+        }
+      });
+    }
+
+    return card;
+  }
+
+  function renderSourceCard(cardData) {
+    const card = document.createElement("div");
+    card.className = "chat-card card-source";
+
+    const sources = cardData.sources || [];
+    const sourcesHtml = sources
+      .map(
+        (s) => `
+      <div class="source-item">
+        <a href="${escapeHtml(s.url || "#")}" target="_blank" rel="noopener" class="source-title-link">
+          🔗 ${escapeHtml(s.title || s.url || "Web Source")}
+        </a>
+        <div class="source-summary">${escapeHtml(s.summary || (s.claims ? s.claims.join("; ") : "Verified reference"))}</div>
+      </div>
+    `
+      )
+      .join("");
+
+    card.innerHTML = `
+      <div class="card-header-row">
+        <span class="card-badge">Web Research Provenance</span>
+        <span style="font-size:0.7rem;color:var(--text-muted)">${sources.length} sources found</span>
+      </div>
+      <div class="sources-list" style="display:flex;flex-direction:column;gap:0.35rem;">
+        ${sourcesHtml}
+      </div>
+      <div class="source-actions-row">
+        <button type="button" class="btn-approve-sources" id="btnSourceApprove">✓ Approve Sources</button>
+        <button type="button" class="btn-reject-sources" id="btnSourceReject">✕ Reject Sources</button>
+      </div>
+    `;
+
+    const btnApproveEl = card.querySelector("#btnSourceApprove");
+    const btnRejectEl = card.querySelector("#btnSourceReject");
+
+    if (btnApproveEl) {
+      btnApproveEl.addEventListener("click", () => {
+        btnApproveEl.disabled = true;
+        if (btnRejectEl) btnRejectEl.disabled = true;
+        approveSources(activeSessionId, true);
+      });
+    }
+
+    if (btnRejectEl) {
+      btnRejectEl.addEventListener("click", () => {
+        btnApproveEl.disabled = true;
+        if (btnRejectEl) btnRejectEl.disabled = true;
+        approveSources(activeSessionId, false);
+      });
+    }
+
+    return card;
+  }
+
+  function renderExecutionCard(cardData) {
+    const card = document.createElement("div");
+    card.className = "chat-card card-execution";
+    card.innerHTML = `
+      <div class="card-header-row">
+        <span class="card-badge">Execution</span>
+      </div>
+      <div class="execution-progress-row">
+        <span class="spinner" style="width:14px;height:14px;"></span>
+        <span>${escapeHtml(cardData.message || "Mutating presentation & verifying quality gates...")}</span>
+      </div>
+    `;
+    return card;
+  }
+
+  function renderReviewCard(cardData) {
+    const card = document.createElement("div");
+    card.className = "chat-card card-review";
+
+    const jobId = cardData.job_id || currentJobId;
+    const downloadUrl = jobId ? `/api/v1/jobs/${jobId}/artifacts/presentation.pptx` : "#";
+
+    card.innerHTML = `
+      <div class="card-header-row">
+        <span class="card-badge">Review & Download</span>
+        <span style="color:var(--success);font-weight:600;font-size:0.75rem;">✓ Verified</span>
+      </div>
+      <div class="review-diff-summary">
+        Slide modifications compiled cleanly. You can inspect the side-by-side diff on the canvas, download your PPTX, or ask follow-up questions below.
+      </div>
+      <div class="review-actions-row">
+        <a href="${downloadUrl}" class="btn-chat-download" download>
+          <span>📥 Download PPTX</span>
+        </a>
+      </div>
+    `;
+    return card;
+  }
+
+  function renderErrorCard(errorText, retryCallback) {
+    const card = document.createElement("div");
+    card.className = "chat-card card-error";
+    card.innerHTML = `
+      <div class="card-header-row">
+        <span class="card-badge">Error</span>
+      </div>
+      <div class="error-details-text">${escapeHtml(errorText || "An unexpected error occurred.")}</div>
+      ${retryCallback ? '<button type="button" class="btn-retry-chat">🔄 Retry Request</button>' : ""}
+    `;
+
+    if (retryCallback) {
+      const btnRetry = card.querySelector(".btn-retry-chat");
+      if (btnRetry) {
+        btnRetry.addEventListener("click", () => retryCallback());
+      }
+    }
+    return card;
+  }
+
+  /* --------------------------------------------------------------------------
+     Session Approvals & Execution Orchestration (ADS-002)
+     -------------------------------------------------------------------------- */
+  async function approvePlan(sessionId, isApproved, feedback = null) {
+    if (!sessionId) return;
+
+    try {
+      const res = await fetch(`/api/v1/sessions/${sessionId}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: "plan",
+          approved: isApproved,
+          feedback: feedback,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Plan approval failed");
+      const respData = await res.json();
+      updateStepper(respData.state);
+
+      if (isApproved) {
+        if (respData.state === "READY_FOR_EXECUTION" || respData.state === "EXECUTING") {
+          await executeSession(sessionId);
+        } else if (respData.state === "RESEARCHING" || respData.state === "WAITING_SOURCE_APPROVAL") {
+          renderChatTurn({
+            role: "assistant",
+            content: "Searching web sources for presentation data...",
+            cards: [{ type: "execution", message: "Web research in progress..." }],
+          });
+        }
+      }
+    } catch (e) {
+      alert(`Approval error: ${e.message}`);
+    }
+  }
+
+  async function approveSources(sessionId, isApproved, feedback = null) {
+    if (!sessionId) return;
+
+    try {
+      const res = await fetch(`/api/v1/sessions/${sessionId}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: "sources",
+          approved: isApproved,
+          feedback: feedback,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Sources approval failed");
+      const respData = await res.json();
+      updateStepper(respData.state);
+
+      if (isApproved) {
+        await executeSession(sessionId);
+      }
+    } catch (e) {
+      alert(`Source approval error: ${e.message}`);
+    }
+  }
+
+  async function executeSession(sessionId) {
+    if (!sessionId) return;
+
+    try {
+      renderChatTurn({
+        role: "assistant",
+        content: "Executing approved slide operations...",
+        cards: [{ type: "execution", message: "Planning & executing deterministic PPTX mutations..." }],
+      });
+
+      // Show loading on After slide canvas
+      if (afterPlaceholder) afterPlaceholder.style.display = "none";
+      if (afterError) afterError.style.display = "none";
+      if (afterLoading) afterLoading.style.display = "flex";
+      if (afterStatusLabel) afterStatusLabel.textContent = "AI Executing...";
+
+      const res = await fetch(`/api/v1/sessions/${sessionId}/execute`, {
+        method: "POST",
+      });
+
+      if (!res.ok) throw new Error("Execution initiation failed");
+      const data = await res.json();
+      if (data.job_id) {
+        currentJobId = data.job_id;
+        startPolling(currentJobId, () => {
+          onSessionExecutionCompleted(sessionId, currentJobId);
+        });
+      }
+    } catch (e) {
+      renderChatTurn({
+        role: "assistant",
+        content: "Execution could not be completed.",
+        cards: [{ type: "error", message: e.message }],
+      });
+    }
+  }
+
+  function onSessionExecutionCompleted(sessionId, jobId) {
+    renderChatTurn({
+      role: "assistant",
+      content: "✨ Slide deck updated and quality gates verified!",
+      cards: [{ type: "review", job_id: jobId }],
+    });
   }
 
   /* ==========================================================================
@@ -310,6 +931,7 @@
     if (selectionRect) selectionRect.style.display = "none";
     if (regionBadge) regionBadge.style.display = "none";
     setScopeKind("slide");
+    updateChatSelectionContext({ slide_index: activeSlideIndex, object_ref: null, selected_text: null });
   }
 
   function setupRegionSelection() {
@@ -378,71 +1000,34 @@
 
         setScopeKind("region");
         if (regionCoordsLabel) {
-          regionCoordsLabel.textContent = `Region: [${(normX * 100).toFixed(0)}%, ${(normY * 100).toFixed(0)}% • ${(normW * 100).toFixed(0)}%×${(normH * 100).toFixed(0)}%]`;
+          regionCoordsLabel.textContent = `Region S${activeSlideIndex}: [${(normX * 100).toFixed(0)}%, ${(normY * 100).toFixed(0)}%, ${(normW * 100).toFixed(0)}%, ${(normH * 100).toFixed(0)}%]`;
         }
-        if (regionBadge) regionBadge.style.display = "flex";
+
+        // Bind region into Chat selection context
+        updateChatSelectionContext({
+          slide_index: activeSlideIndex,
+          object_ref: null,
+          selected_text: `Region [${(normX * 100).toFixed(0)}%, ${(normY * 100).toFixed(0)}%, ${(normW * 100).toFixed(0)}%, ${(normH * 100).toFixed(0)}%]`,
+        });
       } else {
-        selectionRect.style.display = "none";
+        clearRegionSelection();
       }
     });
   }
 
   /* ==========================================================================
-     Robust Preview Image Loading & Fallbacks
-     ========================================================================== */
-  function loadPreviewImage(pane, url, isRetry = false) {
-    const isBefore = pane === "before";
-    const imgEl = isBefore ? beforeImg : afterImg;
-    const loadingEl = isBefore ? beforeLoading : afterLoading;
-    const errorEl = isBefore ? beforeError : afterError;
-    const errorMsgEl = isBefore ? beforeErrorMsg : afterErrorMsg;
-    const placeholderEl = isBefore ? beforePlaceholder : afterPlaceholder;
-    const ingestEl = isBefore ? beforeIngestState : null;
-
-    if (!imgEl) return;
-
-    if (isBefore) currentBeforeUrl = url;
-    else currentAfterUrl = url;
-
-    // Cache-busting if retrying
-    const targetUrl = isRetry ? `${url}${url.includes("?") ? "&" : "?"}_t=${Date.now()}` : url;
-
-    // Show loading skeleton, hide other layers
-    if (loadingEl) loadingEl.style.display = "flex";
-    if (errorEl) errorEl.style.display = "none";
-    if (placeholderEl) placeholderEl.style.display = "none";
-    if (ingestEl) ingestEl.style.display = "none";
-
-    imgEl.onload = () => {
-      if (loadingEl) loadingEl.style.display = "none";
-      if (errorEl) errorEl.style.display = "none";
-      imgEl.style.display = "block";
-    };
-
-    imgEl.onerror = () => {
-      if (loadingEl) loadingEl.style.display = "none";
-      imgEl.style.display = "none";
-      if (errorEl) {
-        errorEl.style.display = "flex";
-        if (errorMsgEl) errorMsgEl.textContent = `Could not load ${isBefore ? "original" : "modified"} preview from ${url}`;
-      }
-    };
-
-    imgEl.src = targetUrl;
-  }
-
-  /* ==========================================================================
-     Job Submission & Lifecycle
+     Submit Job (Command Bar Legacy Fallback)
      ========================================================================== */
   async function submitJob() {
     if (!selectedFile) {
-      alert("Please choose a PPTX presentation to upload.");
+      alert("Please select or drop a .pptx file first.");
       return;
     }
-    const instruction = instructionInput.value.trim();
+
+    const instruction = instructionInput ? instructionInput.value.trim() : "";
     if (!instruction) {
-      alert("Please provide an edit instruction.");
-      instructionInput.focus();
+      alert("Please enter a natural-language edit instruction.");
+      if (instructionInput) instructionInput.focus();
       return;
     }
 
@@ -494,7 +1079,7 @@
     }
   }
 
-  function startPolling(jobId) {
+  function startPolling(jobId, onCompleteCallback = null) {
     if (pollingInterval) clearInterval(pollingInterval);
     pollingInterval = setInterval(async () => {
       try {
@@ -510,9 +1095,11 @@
           if (job.state === "AWAITING_USER_APPROVAL") {
             clearInterval(pollingInterval);
             showReviewState(jobId);
+            if (onCompleteCallback) onCompleteCallback();
           } else if (job.state === "ACCEPTED") {
             clearInterval(pollingInterval);
             showAcceptedState(jobId);
+            if (onCompleteCallback) onCompleteCallback();
           } else if (job.state === "FAILED" || job.state === "REJECTED" || job.state === "CANCELLED") {
             clearInterval(pollingInterval);
             showTerminalState(job.state);
@@ -533,11 +1120,11 @@
     const steps = ["INGEST", "PLAN", "EXECUTE", "VERIFY", "REVIEW"];
     let activeIdx = 0;
 
-    if (state === "INGESTING" || state === "CREATED") activeIdx = 0;
-    else if (state === "PLANNING" || state === "AWAITING_PLAN_REVIEW") activeIdx = 1;
-    else if (state === "EXECUTING" || state === "RENDERING") activeIdx = 2;
+    if (state === "INGESTING" || state === "CREATED" || state === "NEEDS_CLARIFICATION" || state === "READY_FOR_PLAN") activeIdx = 0;
+    else if (state === "PLANNING" || state === "WAITING_PLAN_APPROVAL" || state === "RESEARCHING" || state === "WAITING_SOURCE_APPROVAL") activeIdx = 1;
+    else if (state === "READY_FOR_EXECUTION" || state === "EXECUTING" || state === "RENDERING") activeIdx = 2;
     else if (state === "VERIFYING" || state === "REPAIRING") activeIdx = 3;
-    else if (state === "AWAITING_USER_APPROVAL" || state === "ACCEPTED") activeIdx = 4;
+    else if (state === "AWAITING_USER_APPROVAL" || state === "ACCEPTED" || state === "REVIEW" || state === "COMPLETED") activeIdx = 4;
 
     document.querySelectorAll(".step-item").forEach((el, idx) => {
       el.classList.remove("active", "completed");
@@ -664,6 +1251,9 @@
     if (scopeSlideSelect) scopeSlideSelect.value = String(activeSlideIndex);
     updateScopeUI();
 
+    // Bind slide selection into Chat selection context (ADS-002)
+    updateChatSelectionContext({ slide_index: activeSlideIndex });
+
     // Update active class in filmstrip
     document.querySelectorAll(".filmstrip-item").forEach((el, idx) => {
       const isCur = idx + 1 === activeSlideIndex;
@@ -749,53 +1339,51 @@
 
     if (!events || events.length === 0) {
       if (timelineEmpty) eventLogs.appendChild(timelineEmpty);
+      if (eventCounter) eventCounter.textContent = "0 events";
       return;
     }
 
     if (eventCounter) eventCounter.textContent = `${events.length} events`;
 
     events.forEach((ev) => {
-      const entry = document.createElement("div");
-      entry.className = "timeline-entry log-entry";
+      const row = document.createElement("div");
+      row.className = "timeline-event-row";
 
-      const time = new Date(ev.timestamp).toLocaleTimeString();
-      const payloadSummary = formatEventPayload(ev.payload);
-
-      entry.innerHTML = `
-        <span class="timeline-time log-time">[${time}]</span>
-        <span class="timeline-event-name log-msg"><b>${ev.event_type}</b></span>
-        <span class="timeline-detail">${payloadSummary}</span>
+      const timeStr = ev.timestamp ? new Date(ev.timestamp).toLocaleTimeString() : "--:--:--";
+      row.innerHTML = `
+        <span class="timeline-time">${timeStr}</span>
+        <span class="timeline-badge">${ev.stage || ev.type || "EVENT"}</span>
+        <span class="timeline-desc">${formatEventMessage(ev)}</span>
       `;
-      eventLogs.appendChild(entry);
+      eventLogs.appendChild(row);
     });
 
     eventLogs.scrollTop = eventLogs.scrollHeight;
   }
 
-  function formatEventPayload(payload) {
-    if (!payload || typeof payload !== "object") return "";
-    if (payload.message) return payload.message;
-    if (payload.stage) return `Stage: ${payload.stage}`;
-    if (payload.error) return `<span style="color:var(--danger)">${payload.error}</span>`;
-    return JSON.stringify(payload);
-  }
-
-  function appendTimelineEvent(type, msg) {
+  function appendTimelineEvent(stage, message) {
     if (!eventLogs) return;
     if (timelineEmpty && timelineEmpty.parentNode) {
       timelineEmpty.parentNode.removeChild(timelineEmpty);
     }
 
-    const entry = document.createElement("div");
-    entry.className = "timeline-entry log-entry";
-    const time = new Date().toLocaleTimeString();
-    entry.innerHTML = `
-      <span class="timeline-time log-time">[${time}]</span>
-      <span class="timeline-event-name log-msg"><b>${type}</b></span>
-      <span class="timeline-detail">${msg}</span>
+    const row = document.createElement("div");
+    row.className = "timeline-event-row";
+    const timeStr = new Date().toLocaleTimeString();
+    row.innerHTML = `
+      <span class="timeline-time">${timeStr}</span>
+      <span class="timeline-badge">${stage}</span>
+      <span class="timeline-desc">${message}</span>
     `;
-    eventLogs.appendChild(entry);
+    eventLogs.appendChild(row);
     eventLogs.scrollTop = eventLogs.scrollHeight;
+  }
+
+  function formatEventMessage(ev) {
+    if (typeof ev.payload === "string") return ev.payload;
+    if (ev.payload && ev.payload.message) return ev.payload.message;
+    if (ev.payload && ev.payload.instruction) return `Instruction: "${ev.payload.instruction}"`;
+    return JSON.stringify(ev.payload || {});
   }
 
   function renderFindings(findings) {
@@ -820,6 +1408,62 @@
       `;
       findingsContainer.appendChild(card);
     });
+  }
+
+  /* ==========================================================================
+     Robust Image Loading with Fallbacks & Retries
+     ========================================================================== */
+  function loadPreviewImage(type, url, isManualRetry = false) {
+    const isBefore = type === "before";
+    const imgEl = isBefore ? beforeImg : afterImg;
+    const placeholderEl = isBefore ? beforePlaceholder : afterPlaceholder;
+    const ingestStateEl = isBefore ? beforeIngestState : null;
+    const loadingEl = isBefore ? beforeLoading : afterLoading;
+    const errorEl = isBefore ? beforeError : afterError;
+    const errorMsgEl = isBefore ? beforeErrorMsg : afterErrorMsg;
+
+    if (isBefore) currentBeforeUrl = url;
+    else currentAfterUrl = url;
+
+    if (isManualRetry) {
+      if (isBefore) beforeRetryCount = 0;
+      else afterRetryCount = 0;
+    }
+
+    if (placeholderEl) placeholderEl.style.display = "none";
+    if (ingestStateEl) ingestStateEl.style.display = "none";
+    if (errorEl) errorEl.style.display = "none";
+    if (loadingEl) loadingEl.style.display = "flex";
+    if (imgEl) imgEl.style.display = "none";
+
+    const testImg = new Image();
+    testImg.onload = () => {
+      if (loadingEl) loadingEl.style.display = "none";
+      if (errorEl) errorEl.style.display = "none";
+      if (imgEl) {
+        imgEl.src = url;
+        imgEl.style.display = "block";
+      }
+      if (isBefore) beforeRetryCount = 0;
+      else afterRetryCount = 0;
+    };
+
+    testImg.onerror = () => {
+      const retryCount = isBefore ? ++beforeRetryCount : ++afterRetryCount;
+      if (retryCount <= MAX_IMAGE_RETRIES) {
+        setTimeout(() => {
+          loadPreviewImage(type, url);
+        }, 1000 * retryCount);
+      } else {
+        if (loadingEl) loadingEl.style.display = "none";
+        if (errorEl) errorEl.style.display = "flex";
+        if (errorMsgEl) {
+          errorMsgEl.textContent = `Could not load slide preview after ${MAX_IMAGE_RETRIES} attempts.`;
+        }
+      }
+    };
+
+    testImg.src = url;
   }
 
   /* ==========================================================================
@@ -887,5 +1531,30 @@
         </div>
       `;
     }
+  }
+
+  /* ==========================================================================
+     Utilities
+     ========================================================================== */
+  function escapeHtml(str) {
+    if (!str) return "";
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  function formatMarkdownText(str) {
+    if (!str) return "";
+    let safe = escapeHtml(str);
+    // bold
+    safe = safe.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+    // italic
+    safe = safe.replace(/\*([^*]+)\*/g, "<em>$1</em>");
+    // linebreaks
+    safe = safe.replace(/\n/g, "<br>");
+    return safe;
   }
 })();

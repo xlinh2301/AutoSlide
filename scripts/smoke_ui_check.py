@@ -50,20 +50,35 @@ def run_smoke_checks() -> None:
         assert "beforeIngestState" in html
         assert "selectionOverlayCanvas" in html
         assert "highlightOverlayLayer" in html
-        print("  ✓ Studio HTML layout: OK")
+        # Always-on chat rail elements
+        assert 'id="chatRail"' in html
+        assert 'id="chatMessages"' in html
+        assert 'id="chatComposer"' in html
+        assert 'id="chatInput"' in html
+        assert 'id="btnSendChat"' in html
+        assert 'id="chatContextBadge"' in html
+        print("  ✓ Studio HTML layout with persistent Chat Rail: OK")
 
         # 3. Static Assets
         res_css = client.get("/static/css/workbench.css")
         assert res_css.status_code == 200
         assert "workbench-container" in res_css.text
         assert "diff-highlight-box" in res_css.text
-        print("  ✓ Studio CSS stylesheet: OK")
+        assert "chat-rail" in res_css.text
+        assert "card-question" in res_css.text
+        assert "card-plan" in res_css.text
+        assert "card-source" in res_css.text
+        print("  ✓ Studio CSS stylesheet with Card components: OK")
 
         res_js = client.get("/static/js/workbench.js")
         assert res_js.status_code == 200
         assert "handleFileSelect" in res_js.text
         assert "buildSlideNavigator" in res_js.text
-        print("  ✓ Studio JS client bundle: OK")
+        assert "sendChatMessage" in res_js.text
+        assert "renderQuestionCard" in res_js.text
+        assert "renderPlanCard" in res_js.text
+        assert "approvePlan" in res_js.text
+        print("  ✓ Studio JS client bundle with Chatbot orchestration: OK")
 
         # 4. Runtimes endpoint
         res_runtimes = client.get("/api/v1/runtimes")

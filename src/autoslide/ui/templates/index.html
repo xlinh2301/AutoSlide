@@ -117,162 +117,215 @@
     </div>
   </nav>
 
-  <!-- Main Canvas Studio Workspace -->
-  <main class="workbench-container studio-canvas-workspace" role="main">
-    <div class="canvas-diff-container">
-      <!-- Left: Original Slide (Before) -->
-      <div class="canvas-panel canvas-before">
-        <div class="canvas-panel-header">
-          <div class="panel-tag tag-before">
-            <span class="tag-bullet"></span>
-            <span class="tag-title">Original Slide</span>
-          </div>
-          <div class="panel-hint" id="paneHintOriginal">
-            <span class="hint-icon">🎯</span> Click-drag on slide to select target region
-          </div>
-        </div>
-
-        <div class="slide-frame" id="beforeFrame">
-          <img id="beforeImg" src="" alt="Original Slide Preview" style="display: none;">
-          
-          <!-- Drag-Region Canvas Layer -->
-          <div class="selection-overlay-canvas" id="selectionOverlayCanvas" title="Drag to select region">
-            <div class="selection-rect" id="selectionRect" style="display: none;">
-              <span class="selection-coords" id="selectionCoordsText">0% × 0%</span>
+  <!-- Main Canvas Studio Workspace with Always-on Chat Rail -->
+  <main class="workbench-container studio-canvas-workspace studio-layout-grid" role="main">
+    <!-- Left/Center: Visual Canvas & Panels -->
+    <div class="canvas-main-column">
+      <div class="canvas-diff-container">
+        <!-- Left: Original Slide (Before) -->
+        <div class="canvas-panel canvas-before">
+          <div class="canvas-panel-header">
+            <div class="panel-tag tag-before">
+              <span class="tag-bullet"></span>
+              <span class="tag-title">Original Slide</span>
+            </div>
+            <div class="panel-hint" id="paneHintOriginal">
+              <span class="hint-icon">🎯</span> Click-drag on slide to select target region
             </div>
           </div>
 
-          <!-- Empty State Layer -->
-          <div class="canvas-state-layer canvas-empty" id="beforePlaceholder">
-            <div class="state-icon">📄</div>
-            <div class="state-title">No Presentation Loaded</div>
-            <div class="state-subtitle">Select or drop a .pptx template in the command bar above</div>
+          <div class="slide-frame" id="beforeFrame">
+            <img id="beforeImg" src="" alt="Original Slide Preview" style="display: none;">
+            
+            <!-- Drag-Region Canvas Layer -->
+            <div class="selection-overlay-canvas" id="selectionOverlayCanvas" title="Drag to select region">
+              <div class="selection-rect" id="selectionRect" style="display: none;">
+                <span class="selection-coords" id="selectionCoordsText">0% × 0%</span>
+              </div>
+            </div>
+
+            <!-- Empty State Layer -->
+            <div class="canvas-state-layer canvas-empty" id="beforePlaceholder">
+              <div class="state-icon">📄</div>
+              <div class="state-title">No Presentation Loaded</div>
+              <div class="state-subtitle">Select or drop a .pptx template in the command bar above</div>
+            </div>
+
+            <!-- Immediate Ingest State Layer -->
+            <div class="canvas-state-layer canvas-ingested" id="beforeIngestState" style="display: none;">
+              <div class="state-badge">INGEST READY</div>
+              <div class="state-icon">📊</div>
+              <div class="state-title" id="ingestDeckTitle">Presentation Ingested</div>
+              <div class="state-subtitle" id="ingestDeckSubtitle">Ready for instruction. Enter a prompt and click "Run AI Edit" or chat with Agent.</div>
+            </div>
+
+            <!-- Loading Skeleton Layer -->
+            <div class="canvas-state-layer canvas-loading" id="beforeLoading" style="display: none;">
+              <div class="spinner"></div>
+              <div class="state-title">Rendering Slide Preview...</div>
+            </div>
+
+            <!-- Error Fallback Layer -->
+            <div class="canvas-state-layer canvas-error" id="beforeError" style="display: none;">
+              <div class="state-icon">⚠️</div>
+              <div class="state-title">Preview Failed to Load</div>
+              <div class="state-subtitle" id="beforeErrorMsg">Artifact unavailable or render error</div>
+              <button type="button" class="btn-secondary btn-retry" id="btnRetryBefore">Retry Loading</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Modified Slide (After) -->
+        <div class="canvas-panel canvas-after">
+          <div class="canvas-panel-header">
+            <div class="panel-tag tag-after">
+              <span class="tag-bullet"></span>
+              <span class="tag-title">Modified Slide</span>
+              <span class="diff-badge" id="diffBadge" style="display: none;">Modified</span>
+            </div>
+            <div class="panel-status-label" id="afterStatusLabel">Awaiting Edit</div>
           </div>
 
-          <!-- Immediate Ingest State Layer -->
-          <div class="canvas-state-layer canvas-ingested" id="beforeIngestState" style="display: none;">
-            <div class="state-badge">INGEST READY</div>
-            <div class="state-icon">📊</div>
-            <div class="state-title" id="ingestDeckTitle">Presentation Ingested</div>
-            <div class="state-subtitle" id="ingestDeckSubtitle">Ready for instruction. Enter a prompt and click "Run AI Edit".</div>
-          </div>
+          <div class="slide-frame" id="afterFrame">
+            <img id="afterImg" src="" alt="Modified Slide Preview" style="display: none;">
+            
+            <!-- Highlight Overlay Layer for Changed Objects -->
+            <div class="highlight-overlay-layer" id="highlightOverlayLayer"></div>
 
-          <!-- Loading Skeleton Layer -->
-          <div class="canvas-state-layer canvas-loading" id="beforeLoading" style="display: none;">
-            <div class="spinner"></div>
-            <div class="state-title">Rendering Slide Preview...</div>
-          </div>
+            <!-- Empty State Layer -->
+            <div class="canvas-state-layer canvas-empty" id="afterPlaceholder">
+              <div class="state-icon">⚡</div>
+              <div class="state-title">Awaiting AI Mutations</div>
+              <div class="state-subtitle">Side-by-side diff highlights will appear here after execution</div>
+            </div>
 
-          <!-- Error Fallback Layer -->
-          <div class="canvas-state-layer canvas-error" id="beforeError" style="display: none;">
-            <div class="state-icon">⚠️</div>
-            <div class="state-title">Preview Failed to Load</div>
-            <div class="state-subtitle" id="beforeErrorMsg">Artifact unavailable or render error</div>
-            <button type="button" class="btn-secondary btn-retry" id="btnRetryBefore">Retry Loading</button>
+            <!-- Loading Skeleton Layer -->
+            <div class="canvas-state-layer canvas-loading" id="afterLoading" style="display: none;">
+              <div class="spinner"></div>
+              <div class="state-title" id="afterLoadingTitle">Running Pipeline...</div>
+              <div class="state-subtitle" id="afterLoadingSubtitle">Planning & executing deterministic edits</div>
+            </div>
+
+            <!-- Error Fallback Layer -->
+            <div class="canvas-state-layer canvas-error" id="afterError" style="display: none;">
+              <div class="state-icon">⚠️</div>
+              <div class="state-title">Modified Preview Failed</div>
+              <div class="state-subtitle" id="afterErrorMsg">Artifact unavailable or render error</div>
+              <button type="button" class="btn-secondary btn-retry" id="btnRetryAfter">Retry Loading</button>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- Right: Modified Slide (After) -->
-      <div class="canvas-panel canvas-after">
-        <div class="canvas-panel-header">
-          <div class="panel-tag tag-after">
-            <span class="tag-bullet"></span>
-            <span class="tag-title">Modified Slide</span>
-            <span class="diff-badge" id="diffBadge" style="display: none;">Modified</span>
+      <!-- Pipeline Stepper Progress Bar -->
+      <div class="pipeline-bar-wrapper">
+        <div class="pipeline-stepper" aria-label="Pipeline Status Stages">
+          <div class="step-item active" data-step="INGEST">
+            <div class="step-circle">1</div>
+            <div class="step-label">Ingest</div>
           </div>
-          <div class="panel-status-label" id="afterStatusLabel">Awaiting Edit</div>
-        </div>
-
-        <div class="slide-frame" id="afterFrame">
-          <img id="afterImg" src="" alt="Modified Slide Preview" style="display: none;">
-          
-          <!-- Highlight Overlay Layer for Changed Objects -->
-          <div class="highlight-overlay-layer" id="highlightOverlayLayer"></div>
-
-          <!-- Empty State Layer -->
-          <div class="canvas-state-layer canvas-empty" id="afterPlaceholder">
-            <div class="state-icon">⚡</div>
-            <div class="state-title">Awaiting AI Mutations</div>
-            <div class="state-subtitle">Side-by-side diff highlights will appear here after execution</div>
+          <div class="step-item" data-step="PLAN">
+            <div class="step-circle">2</div>
+            <div class="step-label">Plan</div>
           </div>
-
-          <!-- Loading Skeleton Layer -->
-          <div class="canvas-state-layer canvas-loading" id="afterLoading" style="display: none;">
-            <div class="spinner"></div>
-            <div class="state-title" id="afterLoadingTitle">Running Pipeline...</div>
-            <div class="state-subtitle" id="afterLoadingSubtitle">Planning & executing deterministic edits</div>
+          <div class="step-item" data-step="EXECUTE">
+            <div class="step-circle">3</div>
+            <div class="step-label">Execute</div>
           </div>
-
-          <!-- Error Fallback Layer -->
-          <div class="canvas-state-layer canvas-error" id="afterError" style="display: none;">
-            <div class="state-icon">⚠️</div>
-            <div class="state-title">Modified Preview Failed</div>
-            <div class="state-subtitle" id="afterErrorMsg">Artifact unavailable or render error</div>
-            <button type="button" class="btn-secondary btn-retry" id="btnRetryAfter">Retry Loading</button>
+          <div class="step-item" data-step="VERIFY">
+            <div class="step-circle">4</div>
+            <div class="step-label">Quality Gates</div>
+          </div>
+          <div class="step-item" data-step="REVIEW">
+            <div class="step-circle">5</div>
+            <div class="step-label">Review & Download</div>
           </div>
         </div>
       </div>
+
+      <!-- Bottom Studio Panels: Timeline & QA Findings -->
+      <section class="studio-bottom-panels">
+        <!-- Panel 1: Live Event Timeline Stream -->
+        <div class="panel-card timeline-card">
+          <div class="panel-card-header">
+            <div class="panel-card-title">
+              <span class="card-icon">⏱️</span> Event Timeline
+            </div>
+            <span class="event-counter" id="eventCounter">0 events</span>
+          </div>
+          <div class="event-timeline-container" id="eventLogs" role="log" aria-live="polite">
+            <div class="timeline-empty" id="timelineEmpty">
+              <span>Studio initialized. Ready for job dispatch.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Panel 2: Quality Gates & Verification Findings -->
+        <div class="panel-card findings-card">
+          <div class="panel-card-header">
+            <div class="panel-card-title">
+              <span class="card-icon">🛡️</span> QA Findings & Verification
+            </div>
+            <span class="qa-status-tag" id="qaStatusTag">Pending</span>
+          </div>
+          <div class="findings-grid" id="findingsContainer">
+            <div class="findings-empty" id="findingsEmpty">
+              <span>Structural & visual gate results will appear here after edit verification.</span>
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
 
-    <!-- Pipeline Stepper Progress Bar -->
-    <div class="pipeline-bar-wrapper">
-      <div class="pipeline-stepper" aria-label="Pipeline Status Stages">
-        <div class="step-item active" data-step="INGEST">
-          <div class="step-circle">1</div>
-          <div class="step-label">Ingest</div>
+    <!-- Right: Persistent Always-on Chat Rail -->
+    <aside class="chat-rail" id="chatRail" aria-label="Always-on Agent Chat">
+      <header class="chat-header" id="chatHeader">
+        <div class="chat-header-title">
+          <span class="chat-header-icon" aria-hidden="true">💬</span>
+          <span class="chat-title-text">AutoSlide Agent</span>
         </div>
-        <div class="step-item" data-step="PLAN">
-          <div class="step-circle">2</div>
-          <div class="step-label">Plan</div>
+        <div class="chat-header-status" id="chatHeaderStatus">
+          <span class="chat-status-dot"></span>
+          <span id="chatStatusText">Ready</span>
         </div>
-        <div class="step-item" data-step="EXECUTE">
-          <div class="step-circle">3</div>
-          <div class="step-label">Execute</div>
-        </div>
-        <div class="step-item" data-step="VERIFY">
-          <div class="step-circle">4</div>
-          <div class="step-label">Quality Gates</div>
-        </div>
-        <div class="step-item" data-step="REVIEW">
-          <div class="step-circle">5</div>
-          <div class="step-label">Review & Download</div>
-        </div>
-      </div>
-    </div>
+      </header>
 
-    <!-- Bottom Studio Panels: Timeline & QA Findings -->
-    <section class="studio-bottom-panels">
-      <!-- Panel 1: Live Event Timeline Stream -->
-      <div class="panel-card timeline-card">
-        <div class="panel-card-header">
-          <div class="panel-card-title">
-            <span class="card-icon">⏱️</span> Event Timeline
-          </div>
-          <span class="event-counter" id="eventCounter">0 events</span>
-        </div>
-        <div class="event-timeline-container" id="eventLogs" role="log" aria-live="polite">
-          <div class="timeline-empty" id="timelineEmpty">
-            <span>Studio initialized. Ready for job dispatch.</span>
+      <!-- Scrollable Message Stream -->
+      <div class="chat-messages" id="chatMessages" role="log" aria-live="polite">
+        <div class="chat-turn turn-assistant chat-welcome">
+          <div class="turn-avatar">🤖</div>
+          <div class="turn-bubble">
+            <div class="turn-text">
+              👋 <strong>Welcome to AutoSlide Agent Chat.</strong> Upload a presentation or ask me how to improve, restructure, or generate content for your slides.
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- Panel 2: Quality Gates & Verification Findings -->
-      <div class="panel-card findings-card">
-        <div class="panel-card-header">
-          <div class="panel-card-title">
-            <span class="card-icon">🛡️</span> QA Findings & Verification
-          </div>
-          <span class="qa-status-tag" id="qaStatusTag">Pending</span>
+      <!-- Chat Composer Bar with Context Binding -->
+      <div class="chat-composer" id="chatComposer">
+        <div class="chat-context-badge" id="chatContextBadge" style="display: none;">
+          <span class="context-icon" aria-hidden="true">🎯</span>
+          <span class="context-label" id="chatContextLabel">Slide 1</span>
+          <button type="button" class="btn-clear-context" id="btnClearChatContext" title="Clear selection context" aria-label="Clear selection context">✕</button>
         </div>
-        <div class="findings-grid" id="findingsContainer">
-          <div class="findings-empty" id="findingsEmpty">
-            <span>Structural & visual gate results will appear here after edit verification.</span>
-          </div>
+        <div class="chat-input-row">
+          <textarea
+            id="chatInput"
+            class="chat-input"
+            placeholder="Ask agent to clarify, edit slide, or search web..."
+            rows="2"
+            aria-label="Agent chat input"
+          ></textarea>
+          <button type="button" class="btn-send-chat" id="btnSendChat" title="Send message (Enter)" aria-label="Send message">
+            <span class="btn-icon">🚀</span>
+          </button>
+        </div>
+        <div class="chat-composer-hint">
+          <span>Press <strong>Enter</strong> to send, <strong>Shift+Enter</strong> for newline</span>
         </div>
       </div>
-    </section>
+    </aside>
   </main>
 
   <!-- Floating Human Review & Final Download Bar -->

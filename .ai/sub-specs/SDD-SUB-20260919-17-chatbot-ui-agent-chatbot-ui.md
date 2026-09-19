@@ -2,7 +2,7 @@
 id: SDD-SUB-20260919-17
 title: Always-on Chatbot UI and End-to-End Verification
 author: agent-chatbot-ui
-status: APPROVED # DRAFT | REVIEW | APPROVED | MERGED | COMPLETED
+status: COMPLETED # DRAFT | REVIEW | APPROVED | MERGED | COMPLETED
 main_spec: "[[.ai/specs/ADS-002/requirements.md]]"
 summary: "Implement always-on conversational chatbot rail, interactive cards (QuestionCard, PlanCard, SourceCard, ExecutionCard, ReviewCard, ErrorCard), selection context binding, and browser smoke verification flow."
 decisions:
@@ -26,7 +26,7 @@ risk_level: LOW # LOW | MEDIUM | HIGH
 > [!ABSTRACT] Tóm tắt cho AI
 > **Mục tiêu**: Hiện thực hóa Task 6 trong kế hoạch Always-on Agent Chat (`ADS-002`): xây dựng giao diện chatbot thường trực (always-on chatbot rail) trên AutoSlide Studio Workbench, hỗ trợ hiển thị thẻ tương tác chuyên dụng (`QuestionCard`, `PlanCard`, `SourceCard`, `ExecutionCard`, `ReviewCard`, `ErrorCard`), tự động gắn kết ngữ cảnh chọn slide/vùng (`SelectionContext`) vào thanh soạn thảo chat, và thiết lập kịch bản kiểm thử luồng hội thoại hoàn chỉnh (`scripts/smoke_conversation_flow.py` & `tests/ui/test_conversation_ui.py`).
 > **Quyết định then chốt**: Tích hợp thanh chat cố định bên phải (right rail) hoạt động song song với Canvas Before/After và Filmstrip; hỗ trợ API transport `POST /api/v1/sessions/{id}/messages`; chuyển hóa các quyết định phê duyệt (plan approval, source approval) thành các action trên thẻ; giữ vững tính khả dụng độc lập không phụ thuộc thư viện frontend ngoài (vanilla HTML/CSS/ES6).
-> **Rủi ro**: #risk/LOW | **Trạng thái**: #status/DRAFT
+> **Rủi ro**: #risk/LOW | **Trạng thái**: #status/COMPLETED
 
 ---
 
@@ -55,13 +55,13 @@ Hiện thực hóa Task 6 theo thiết kế `ADS-002`:
 
 ## 2. Giả định & Rủi ro (Assumptions & Risks)
 
-- [ ] **Giả định**: Backend endpoints `POST /api/v1/sessions`, `POST /api/v1/sessions/{id}/messages`, `GET /api/v1/sessions/{id}`, `POST /api/v1/sessions/{id}/approve`, và `POST /api/v1/sessions/{id}/execute` đã sẵn sàng và tuân thủ `ADS-002`.
-- [ ] **Giả định**: Mã nguồn UI tuân thủ nguyên tắc vanilla HTML/CSS/JavaScript (ES6), không dùng NPM package build step hay React/Vue framework để đảm bảo tính nhẹ và chạy cục bộ 100%.
-- [ ] **Rủi ro**: Việc mở rộng layout thêm thanh Chatbot Rail có thể làm co hẹp không gian hiển thị của Canvas Before/After trên màn hình nhỏ.
-  - *Biện pháp*: Thiết kế responsive layout với CSS Grid / Flexbox, cho phép cuộn độc lập và hỗ trợ toggle thu gọn/mở rộng chat rail khi cần thiết.
-- [ ] **Rủi ro**: Lỗi mạng hoặc trễ phản hồi từ LLM runtime có thể làm giao diện bị treo trạng thái loading.
+- [x] **Giả định**: Backend endpoints `POST /api/v1/sessions`, `POST /api/v1/sessions/{id}/messages`, `GET /api/v1/sessions/{id}`, `POST /api/v1/sessions/{id}/approve`, và `POST /api/v1/sessions/{id}/execute` đã sẵn sàng và tuân thủ `ADS-002`.
+- [x] **Giả định**: Mã nguồn UI tuân thủ nguyên tắc vanilla HTML/CSS/JavaScript (ES6), không dùng NPM package build step hay React/Vue framework để đảm bảo tính nhẹ và chạy cục bộ 100%.
+- [x] **Rủi ro**: Việc mở rộng layout thêm thanh Chatbot Rail có thể làm co hẹp không gian hiển thị của Canvas Before/After trên màn hình nhỏ.
+  - *Biện pháp*: Thiết kế responsive layout với CSS Grid / Flexbox, cho phép cuộn độc lập và hỗ trợ responsive break point ở 1200px.
+- [x] **Rủi ro**: Lỗi mạng hoặc trễ phản hồi từ LLM runtime có thể làm giao diện bị treo trạng thái loading.
   - *Biện pháp*: Bổ sung optimistic UI rendering, timeout handling, trạng thái disabled cho nút gửi khi đang xử lý, và hiển thị `ErrorCard` có nút Retry khi request thất bại.
-- [ ] **`[UNKNOWN]`**: [UNKNOWN: None - API contracts and DOM schemas are fully defined in ADS-002 specs and Task 1-5 sub-specs]
+- [x] **`[UNKNOWN]`**: [UNKNOWN: None - API contracts and DOM schemas are fully defined in ADS-002 specs and Task 1-5 sub-specs]
 
 ---
 
@@ -71,7 +71,7 @@ Hiện thực hóa Task 6 theo thiết kế `ADS-002`:
 | :--- | :--- | :--- |
 | `src/autoslide/ui/templates/index.html` | Modify | Thêm cấu trúc DOM cho Persistent Chat Rail (`#chatRail`, `#chatMessages`, `#chatComposer`, `#chatInput`, `#btnSendChat`, `#chatContextBadge`), gắn kết các card templates. |
 | `src/autoslide/ui/static/css/workbench.css` | Modify | Thêm CSS styles cho Chat Rail (layout 3 cột: Filmstrip, Canvas Diff, Chat Rail), kiểu dáng từng loại card (`card-question`, `card-plan`, `card-source`, `card-execution`, `card-review`, `card-error`), message bubbles, và composer context tags. |
-| `src/autoslide/ui/static/js/workbench.js` | Modify | Bổ sung module quản lý Session (`sessionState`), hàm gửi tin nhắn `sendChatMessage`, các hàm render thẻ (`renderQuestionCard`, `renderPlanCard`, `renderSourceCard`, `renderExecutionCard`, `renderReviewCard`, `renderErrorCard`), hàm xử lý approve/reject plan và sources, cùng cơ chế gắn `SelectionContext` từ canvas/filmstrip. |
+| `src/autoslide/ui/static/js/workbench.js` | Modify | Bổ sung module quản lý Session (`createSessionForFile`), hàm gửi tin nhắn `sendChatMessage`, các hàm render thẻ (`renderQuestionCard`, `renderPlanCard`, `renderSourceCard`, `renderExecutionCard`, `renderReviewCard`, `renderErrorCard`), hàm xử lý approve/reject plan và sources, cùng cơ chế gắn `SelectionContext` từ canvas/filmstrip. |
 | `tests/ui/test_conversation_ui.py` | Create | Bộ test kiểm thử cấu trúc DOM, sự hiện diện của chat elements, message endpoints contract, card schemas, và selection context propagation. |
 | `scripts/smoke_conversation_flow.py` | Create | Kịch bản kiểm thử E2E giả lập luồng hội thoại hoàn chỉnh từ upload, clarification, plan approval, execution, diff preview, đến follow-up turn. |
 | `scripts/smoke_ui_check.py` | Modify | Cập nhật các assertions kiểm tra sự tồn tại của chatbot rail, message containers, và CSS classes liên quan. |
@@ -89,17 +89,17 @@ Hiện thực hóa Task 6 theo thiết kế `ADS-002`:
 
 ## 4. Tiêu chí Chấp nhận (Acceptance Criteria)
 
-- [ ] Giao diện AutoSlide Studio hiển thị đầy đủ Chat Rail thường trực (`#chatRail`) bên cạnh Canvas Before/After và Filmstrip.
-- [ ] Gửi tin nhắn qua Chat Composer gọi đúng endpoint `POST /api/v1/sessions/{session_id}/messages` và hiển thị tin nhắn user/assistant.
-- [ ] Phản hồi chứa câu hỏi làm rõ hiển thị đúng định dạng `QuestionCard` với danh sách lựa chọn có thể click chọn.
-- [ ] Phản hồi chứa kế hoạch hiển thị đúng định dạng `PlanCard` với chi tiết operations và nút hành động Approve / Revise.
-- [ ] Phản hồi chứa nguồn tin hiển thị đúng định dạng `SourceCard` với URL, tóm tắt và nút Approve / Reject.
-- [ ] Trạng thái thực thi hiển thị đúng `ExecutionCard` kèm tiến trình và liên kết trạng thái.
-- [ ] Sau khi thực thi hoàn tất, hiển thị `ReviewCard` kèm nút Download PPTX và hỗ trợ gửi tin nhắn Follow-up.
-- [ ] Lỗi hệ thống/mạng hiển thị đúng `ErrorCard` kèm nút Retry.
-- [ ] Chọn slide trên filmstrip hoặc chọn vùng trên canvas tự động cập nhật `SelectionContext` vào tin nhắn chat tiếp theo.
-- [ ] Kịch bản `scripts/smoke_conversation_flow.py` chạy thành công toàn bộ chu trình không có lỗi.
-- [ ] Kịch bản `scripts/smoke_ui_check.py` và toàn bộ test suite `pytest tests/ui` vượt qua 100%.
+- [x] Giao diện AutoSlide Studio hiển thị đầy đủ Chat Rail thường trực (`#chatRail`) bên cạnh Canvas Before/After và Filmstrip.
+- [x] Gửi tin nhắn qua Chat Composer gọi đúng endpoint `POST /api/v1/sessions/{session_id}/messages` và hiển thị tin nhắn user/assistant.
+- [x] Phản hồi chứa câu hỏi làm rõ hiển thị đúng định dạng `QuestionCard` với danh sách lựa chọn có thể click chọn.
+- [x] Phản hồi chứa kế hoạch hiển thị đúng định dạng `PlanCard` với chi tiết operations và nút hành động Approve / Revise.
+- [x] Phản hồi chứa nguồn tin hiển thị đúng định dạng `SourceCard` với URL, tóm tắt và nút Approve / Reject.
+- [x] Trạng thái thực thi hiển thị đúng `ExecutionCard` kèm tiến trình và liên kết trạng thái.
+- [x] Sau khi thực thi hoàn tất, hiển thị `ReviewCard` kèm nút Download PPTX và hỗ trợ gửi tin nhắn Follow-up.
+- [x] Lỗi hệ thống/mạng hiển thị đúng `ErrorCard` kèm nút Retry.
+- [x] Chọn slide trên filmstrip hoặc chọn vùng trên canvas tự động cập nhật `SelectionContext` vào tin nhắn chat tiếp theo.
+- [x] Kịch bản `scripts/smoke_conversation_flow.py` chạy thành công toàn bộ chu trình không có lỗi.
+- [x] Kịch bản `scripts/smoke_ui_check.py` và toàn bộ test suite `pytest tests/ui` vượt qua 100%.
 
 ---
 
