@@ -21,6 +21,7 @@ from autoslide.jobs.models import (
     JobRecord,
     JobState,
 )
+from autoslide.ingest.renderer import BasePreviewRenderer, select_preview_renderer
 from autoslide.jobs.registry import JobRegistry
 from autoslide.jobs.workspace import JobWorkspace
 from autoslide.orchestrator.pipeline import JobOrchestrator
@@ -34,6 +35,7 @@ def create_app(
     runtime_registry: RuntimeRegistry | None = None,
     event_log: EventLog | None = None,
     orchestrator: JobOrchestrator | None = None,
+    renderer: BasePreviewRenderer | None = None,
 ) -> FastAPI:
     """Create and wire the AutoSlide FastAPI application."""
     app_settings = settings or Settings.from_env()
@@ -42,9 +44,11 @@ def create_app(
     app_registry = registry or JobRegistry(app_settings.data_root / "jobs.db")
     app_runtime_registry = runtime_registry or RuntimeRegistry()
     app_event_log = event_log or EventLog(log_path=app_settings.data_root / "logs")
+    app_renderer = renderer or select_preview_renderer()
     app_orchestrator = orchestrator or JobOrchestrator(
         registry=app_registry,
         event_log=app_event_log,
+        renderer=app_renderer,
     )
 
     app = FastAPI(

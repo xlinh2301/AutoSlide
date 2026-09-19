@@ -15,11 +15,11 @@ from autoslide.ingest.errors import RenderError
 from autoslide.ingest.models import PreviewManifest, SlidePreview
 from autoslide.jobs.workspace import JobWorkspace
 
-# 1x1 Transparent PNG binary data
+# 1x1 Transparent PNG binary data (RFC 2083 standard, decodable by PIL and modern browsers)
 MINIMAL_PNG_BYTES = (
     b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
-    b"\x08\x06\x00\x00\x00\x1f\x15c4\x00\x00\x00\rIDATx\x9cc`\x00\x00\x00"
-    b"\x02\x00\x01H\xaf\xa4q\x00\x00\x00\x00IEND\xaeB`\x82"
+    b"\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc\x60\x60\x60\x60"
+    b"\x00\x00\x00\x05\x00\x01\xa5\xf6E@\x00\x00\x00\x00IEND\xaeB\x60\x82"
 )
 
 
@@ -89,9 +89,11 @@ class LibreOfficePreviewRenderer(BasePreviewRenderer):
         self,
         soffice_bin: str = "soffice",
         timeout_seconds: float = 30.0,
+        fallback_to_mock: bool = False,
     ):
         self.soffice_bin = soffice_bin
         self.timeout_seconds = timeout_seconds
+        self.fallback_to_mock = fallback_to_mock
 
     def render_previews(
         self,
@@ -101,7 +103,39 @@ class LibreOfficePreviewRenderer(BasePreviewRenderer):
         prefix: str = "",
     ) -> PreviewManifest:
         if not shutil.which(self.soffice_bin):
+            if self.fallback_to_mock:
+                return MockPreviewRenderer().render_previews(
+                    pptx_path=pptx_path,
+                    workspace=workspace,
+                    slide_count=slide_count,
+                    prefix=prefix,
+                )
             raise RenderError(f"LibreOffice binary not found at '{self.soffice_bin}'")
+
+        try:
+            return self._render_libreoffice(
+                pptx_path=pptx_path,
+                workspace=workspace,
+                slide_count=slide_count,
+                prefix=prefix,
+            )
+        except RenderError:
+            if self.fallback_to_mock:
+                return MockPreviewRenderer().render_previews(
+                    pptx_path=pptx_path,
+                    workspace=workspace,
+                    slide_count=slide_count,
+                    prefix=prefix,
+                )
+            raise
+
+    def _render_libreoffice(
+        self,
+        pptx_path: Path,
+        workspace: JobWorkspace,
+        slide_count: int = 1,
+        prefix: str = "",
+    ) -> PreviewManifest:
 
         previews_dir = workspace.root / "previews"
         previews_dir.mkdir(parents=True, exist_ok=True)
@@ -249,3 +283,36 @@ class LibreOfficePreviewRenderer(BasePreviewRenderer):
             manifest_path = previews_dir / "manifest.json"
             manifest_path.write_text(manifest.model_dump_json(indent=2), encoding="utf-8")
             return manifest
+
+
+def select_preview_renderer(
+    prefer_real: bool = True,
+    soffice_bin: str = "soffice",
+    timeout_seconds: float = 30.0,
+    fallback_to_mock: bool = True,
+) -> BasePreviewRenderer:
+    """Select appropriate preview renderer based on host capabilities and caller preferences.
+
+    If prefer_real is True and LibreOffice plus a PDF rasterizer (pdftoppm or PyMuPDF/fitz)
+    are available on the host, returns LibreOfficePreviewRenderer (with fallback_to_mock).
+    Otherwise, returns MockPreviewRenderer.
+    """
+    if prefer_real and shutil.which(soffice_bin):
+        has_pdftoppm = bool(shutil.which("pdftoppm"))
+        has_fitz = False
+        try:
+            import fitz  # type: ignore # noqa: F401
+
+            has_fitz = True
+        except ImportError:
+            pass
+
+        if has_pdftoppm or has_fitz:
+            return LibreOfficePreviewRenderer(
+                soffice_bin=soffice_bin,
+                timeout_seconds=timeout_seconds,
+                fallback_to_mock=fallback_to_mock,
+            )
+
+    return MockPreviewRenderer()
+

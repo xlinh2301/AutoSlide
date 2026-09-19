@@ -14,7 +14,7 @@ from autoslide.executor.engine import PPTXExecutor
 from autoslide.executor.models import StructuralDiff
 from autoslide.ingest.models import DeckInventory, ShapeInventoryItem, SlideInventoryItem
 from autoslide.ingest.parser import PPTXIngestor
-from autoslide.ingest.renderer import MockPreviewRenderer
+from autoslide.ingest.renderer import BasePreviewRenderer, MockPreviewRenderer
 from autoslide.ingest.validator import validate_pptx_package
 from autoslide.jobs.models import (
     DeckPreviewDiff,
@@ -50,10 +50,12 @@ class JobOrchestrator:
         self,
         registry: JobRegistry,
         event_log: EventLog,
+        renderer: BasePreviewRenderer | None = None,
     ):
         self.registry = registry
         self.event_log = event_log
-        self.ingestor = PPTXIngestor()
+        self.renderer = renderer or MockPreviewRenderer()
+        self.ingestor = PPTXIngestor(default_renderer=self.renderer)
         self.policy_gate = PolicyGate(strict=True)
         self.executor = PPTXExecutor()
         self.structural_gate = StructuralAcceptanceGate(strict=False)
@@ -338,7 +340,7 @@ class JobOrchestrator:
         initial_inventory = self.ingestor.parse(input_pptx)
 
         # Generate initial previews with "before" tag
-        renderer = MockPreviewRenderer()
+        renderer = self.renderer
         renderer.render_previews(
             pptx_path=input_pptx,
             workspace=workspace,
@@ -546,7 +548,7 @@ class JobOrchestrator:
         # 2. Rendering Phase
         self.registry.force_state(job_id, JobState.RENDERING)
         self.event_log.append(job_id, "STAGE_STARTED", {"stage": "RENDERING"})
-        renderer = MockPreviewRenderer()
+        renderer = self.renderer
         post_inventory = self.ingestor.parse(working_pptx)
         previews_after = renderer.render_previews(
             pptx_path=working_pptx,
