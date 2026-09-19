@@ -3,209 +3,301 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AutoSlide Local Workbench</title>
+  <title>AutoSlide Studio — Canvas-First Workbench</title>
   <link rel="stylesheet" href="/static/css/workbench.css">
 </head>
-<body>
-  <!-- Top Navigation Header -->
-  <header class="header" role="banner">
-    <div class="logo-group">
-      <div class="logo-icon" aria-hidden="true">⚡</div>
-      <div class="logo-title">AutoSlide Workbench</div>
-    </div>
-    <div class="header-status">
-      <div class="runtime-badge" role="status" aria-label="Runtime Status">
-        <span class="runtime-indicator" id="runtimeIndicator"></span>
-        <span id="runtimeName">Checking runtime...</span>
+<body class="studio-body">
+  <!-- Top Persistent Studio Command Bar -->
+  <header class="command-bar" role="banner">
+    <div class="command-brand">
+      <div class="brand-logo" aria-hidden="true">⚡</div>
+      <div class="brand-text">
+        <span class="brand-name">AutoSlide Workbench</span>
+        <span class="brand-tag">Studio</span>
       </div>
     </div>
-  </header>
 
-  <!-- Workbench Grid Layout -->
-  <main class="workbench-container" role="main">
-    <!-- Left Workspace Controls -->
-    <aside class="sidebar-panel">
-      <!-- 1. Presentation Upload -->
-      <div>
-        <div class="section-title">1. Presentation Upload</div>
-        <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Upload PowerPoint Presentation">
-          <input type="file" id="fileInput" accept=".pptx" aria-hidden="true">
-          <div class="dropzone-icon">📁</div>
-          <div class="dropzone-text">Drop .pptx file here or click to browse</div>
-          <div class="dropzone-hint">Local file only (max 50 MB)</div>
-        </div>
-        <div class="file-selected-badge" id="fileBadge"></div>
+    <!-- Presentation Ingestion Area -->
+    <div class="command-ingest">
+      <div class="dropzone compact-dropzone" id="dropzone" tabindex="0" role="button" aria-label="Upload PowerPoint Presentation">
+        <input type="file" id="fileInput" accept=".pptx" aria-hidden="true">
+        <span class="dropzone-icon" aria-hidden="true">📁</span>
+        <span class="dropzone-text" id="dropzoneText">Select .pptx presentation</span>
+      </div>
+      <div class="file-selected-badge" id="fileBadge" style="display: none;">
+        <span class="badge-dot"></span>
+        <span id="fileBadgeName">No file</span>
+      </div>
+      <div class="ingest-status-pill" id="ingestStatusPill" style="display: none;">
+        <span class="pill-dot"></span>
+        <span id="ingestStatusText">Ingest Ready</span>
+      </div>
+    </div>
+
+    <!-- Scope Selector & Target Controls -->
+    <div class="command-scope" id="scopeGroup">
+      <div class="scope-options" role="radiogroup" aria-label="Target Edit Scope">
+        <label class="scope-pill active" id="scopePillSlide" title="Apply prompt to currently viewed slide">
+          <input type="radio" name="scopeKind" value="slide" checked>
+          <span>Current Slide</span>
+        </label>
+        <label class="scope-pill" id="scopePillRegion" title="Drag rectangle on preview canvas to target region">
+          <input type="radio" name="scopeKind" value="region">
+          <span>Selected Region</span>
+        </label>
+        <label class="scope-pill" id="scopePillDeck" title="Apply prompt across entire slide deck">
+          <input type="radio" name="scopeKind" value="deck">
+          <span>All Slides</span>
+        </label>
       </div>
 
-      <!-- 2. Target Edit Scope -->
-      <div class="form-group" id="scopeGroup">
-        <div class="section-title">2. Target Edit Scope</div>
-        <div class="scope-options" role="radiogroup" aria-label="Target Edit Scope">
-          <label class="scope-pill active" id="scopePillSlide">
-            <input type="radio" name="scopeKind" value="slide" checked>
-            <span>Current Slide</span>
-          </label>
-          <label class="scope-pill" id="scopePillRegion">
-            <input type="radio" name="scopeKind" value="region">
-            <span>Selected Region</span>
-          </label>
-          <label class="scope-pill" id="scopePillDeck">
-            <input type="radio" name="scopeKind" value="deck">
-            <span>All Slides</span>
-          </label>
-        </div>
-
-        <div class="scope-row" id="slideSelectRow">
-          <label for="scopeSlideSelect">Target Slide:</label>
-          <select id="scopeSlideSelect" aria-label="Target slide selector">
-            <option value="1">Slide 1</option>
-          </select>
-        </div>
-
-        <div class="region-badge" id="regionBadge" style="display: none;">
-          <div class="region-info">
-            <span class="region-icon">🎯</span>
-            <span id="regionCoordsLabel">Region: (0, 0, 0, 0)</span>
-          </div>
-          <button type="button" class="btn-text-action" id="btnClearRegion">Clear</button>
-        </div>
-      </div>
-
-      <!-- 3. Edit Instruction -->
-      <div class="form-group">
-        <div class="section-title">3. Natural-Language Edit</div>
-        <label for="instructionInput">Instruction prompt</label>
-        <textarea id="instructionInput" placeholder="e.g. Update executive summary title and resize the financial table..." aria-required="true"></textarea>
-      </div>
-
-      <!-- 4. Runtime Selector -->
-      <div class="form-group">
-        <label for="runtimeSelect">Agent CLI Runtime</label>
-        <select id="runtimeSelect" aria-label="Select AI runtime">
-          <option value="">Detecting local runtimes...</option>
+      <div class="scope-slide-picker" id="slideSelectRow">
+        <label for="scopeSlideSelect" class="sr-only">Slide</label>
+        <select id="scopeSlideSelect" aria-label="Target slide selector">
+          <option value="1">Slide 1</option>
         </select>
       </div>
 
-      <!-- Start Button -->
+      <div class="region-badge" id="regionBadge" style="display: none;">
+        <span class="region-icon" aria-hidden="true">🎯</span>
+        <span id="regionCoordsLabel">Region: (0, 0, 0, 0)</span>
+        <button type="button" class="btn-text-action" id="btnClearRegion" title="Clear selected region">✕</button>
+      </div>
+    </div>
+
+    <!-- Natural Language Instruction Prompt -->
+    <div class="command-prompt">
+      <div class="prompt-input-wrapper">
+        <input
+          type="text"
+          id="instructionInput"
+          placeholder="e.g. Update executive summary title, resize charts, or replace KPI metrics..."
+          aria-label="Natural-language edit instruction"
+          aria-required="true"
+          autocomplete="off"
+        />
+        <span class="prompt-scope-tag" id="promptScopeTag">Slide 1</span>
+      </div>
+    </div>
+
+    <!-- Runtime Status & Primary Action Button -->
+    <div class="command-actions">
+      <div class="runtime-group">
+        <div class="runtime-badge" id="runtimeBadge" role="status" aria-label="Runtime Status">
+          <span class="runtime-indicator" id="runtimeIndicator"></span>
+          <span id="runtimeName">Checking runtime...</span>
+        </div>
+        <select id="runtimeSelect" class="runtime-select-compact" aria-label="Select AI runtime">
+          <option value="">Detecting runtimes...</option>
+        </select>
+      </div>
+
       <button class="btn-primary" id="btnSubmit">
-        <span>🚀 Start AI Slide Edit</span>
+        <span class="btn-icon">🚀</span>
+        <span class="btn-label">Run AI Edit</span>
       </button>
+    </div>
+  </header>
 
-      <!-- Pipeline Stepper -->
-      <div>
-        <div class="section-title">Pipeline Progress</div>
-        <div class="pipeline-stepper" aria-label="Pipeline Status Stages">
-          <div class="step-item active">
-            <div class="step-circle">1</div>
-            <div class="step-label">Ingest</div>
+  <!-- Slide Filmstrip Navigator Bar -->
+  <nav class="filmstrip-bar" aria-label="Slide Deck Filmstrip">
+    <div class="filmstrip-header">
+      <span class="filmstrip-title">Slide Deck</span>
+      <span class="filmstrip-count" id="filmstripCount">0 Slides</span>
+      <!-- Legacy Preview Navigator compatibility -->
+      <div class="preview-navigator" id="previewNavigator" style="display: none;">
+        <span class="nav-caption">Slide:</span>
+        <div class="nav-pills" id="navPills"></div>
+      </div>
+    </div>
+    <div class="filmstrip-track" id="filmstripTrack" role="tablist">
+      <div class="filmstrip-empty" id="filmstripEmpty">
+        <span>Load a presentation to view slide thumbnails</span>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Canvas Studio Workspace -->
+  <main class="workbench-container studio-canvas-workspace" role="main">
+    <div class="canvas-diff-container">
+      <!-- Left: Original Slide (Before) -->
+      <div class="canvas-panel canvas-before">
+        <div class="canvas-panel-header">
+          <div class="panel-tag tag-before">
+            <span class="tag-bullet"></span>
+            <span class="tag-title">Original Slide</span>
           </div>
-          <div class="step-item">
-            <div class="step-circle">2</div>
-            <div class="step-label">Plan</div>
+          <div class="panel-hint" id="paneHintOriginal">
+            <span class="hint-icon">🎯</span> Click-drag on slide to select target region
           </div>
-          <div class="step-item">
-            <div class="step-circle">3</div>
-            <div class="step-label">Execute</div>
+        </div>
+
+        <div class="slide-frame" id="beforeFrame">
+          <img id="beforeImg" src="" alt="Original Slide Preview" style="display: none;">
+          
+          <!-- Drag-Region Canvas Layer -->
+          <div class="selection-overlay-canvas" id="selectionOverlayCanvas" title="Drag to select region">
+            <div class="selection-rect" id="selectionRect" style="display: none;">
+              <span class="selection-coords" id="selectionCoordsText">0% × 0%</span>
+            </div>
           </div>
-          <div class="step-item">
-            <div class="step-circle">4</div>
-            <div class="step-label">Quality</div>
+
+          <!-- Empty State Layer -->
+          <div class="canvas-state-layer canvas-empty" id="beforePlaceholder">
+            <div class="state-icon">📄</div>
+            <div class="state-title">No Presentation Loaded</div>
+            <div class="state-subtitle">Select or drop a .pptx template in the command bar above</div>
           </div>
-          <div class="step-item">
-            <div class="step-circle">5</div>
-            <div class="step-label">Review</div>
+
+          <!-- Immediate Ingest State Layer -->
+          <div class="canvas-state-layer canvas-ingested" id="beforeIngestState" style="display: none;">
+            <div class="state-badge">INGEST READY</div>
+            <div class="state-icon">📊</div>
+            <div class="state-title" id="ingestDeckTitle">Presentation Ingested</div>
+            <div class="state-subtitle" id="ingestDeckSubtitle">Ready for instruction. Enter a prompt and click "Run AI Edit".</div>
+          </div>
+
+          <!-- Loading Skeleton Layer -->
+          <div class="canvas-state-layer canvas-loading" id="beforeLoading" style="display: none;">
+            <div class="spinner"></div>
+            <div class="state-title">Rendering Slide Preview...</div>
+          </div>
+
+          <!-- Error Fallback Layer -->
+          <div class="canvas-state-layer canvas-error" id="beforeError" style="display: none;">
+            <div class="state-icon">⚠️</div>
+            <div class="state-title">Preview Failed to Load</div>
+            <div class="state-subtitle" id="beforeErrorMsg">Artifact unavailable or render error</div>
+            <button type="button" class="btn-secondary btn-retry" id="btnRetryBefore">Retry Loading</button>
           </div>
         </div>
       </div>
 
-      <!-- Real-Time Event Logs -->
-      <div>
-        <div class="section-title">Live Event Stream</div>
-        <div class="event-log-container" id="eventLogs" role="log" aria-live="polite">
-          <div class="log-entry">
-            <span class="log-time">[Ready]</span>
-            <span class="log-msg">Workbench initialized. Ready for job.</span>
+      <!-- Right: Modified Slide (After) -->
+      <div class="canvas-panel canvas-after">
+        <div class="canvas-panel-header">
+          <div class="panel-tag tag-after">
+            <span class="tag-bullet"></span>
+            <span class="tag-title">Modified Slide</span>
+            <span class="diff-badge" id="diffBadge" style="display: none;">Modified</span>
+          </div>
+          <div class="panel-status-label" id="afterStatusLabel">Awaiting Edit</div>
+        </div>
+
+        <div class="slide-frame" id="afterFrame">
+          <img id="afterImg" src="" alt="Modified Slide Preview" style="display: none;">
+          
+          <!-- Highlight Overlay Layer for Changed Objects -->
+          <div class="highlight-overlay-layer" id="highlightOverlayLayer"></div>
+
+          <!-- Empty State Layer -->
+          <div class="canvas-state-layer canvas-empty" id="afterPlaceholder">
+            <div class="state-icon">⚡</div>
+            <div class="state-title">Awaiting AI Mutations</div>
+            <div class="state-subtitle">Side-by-side diff highlights will appear here after execution</div>
+          </div>
+
+          <!-- Loading Skeleton Layer -->
+          <div class="canvas-state-layer canvas-loading" id="afterLoading" style="display: none;">
+            <div class="spinner"></div>
+            <div class="state-title" id="afterLoadingTitle">Running Pipeline...</div>
+            <div class="state-subtitle" id="afterLoadingSubtitle">Planning & executing deterministic edits</div>
+          </div>
+
+          <!-- Error Fallback Layer -->
+          <div class="canvas-state-layer canvas-error" id="afterError" style="display: none;">
+            <div class="state-icon">⚠️</div>
+            <div class="state-title">Modified Preview Failed</div>
+            <div class="state-subtitle" id="afterErrorMsg">Artifact unavailable or render error</div>
+            <button type="button" class="btn-secondary btn-retry" id="btnRetryAfter">Retry Loading</button>
           </div>
         </div>
       </div>
-    </aside>
+    </div>
 
-    <!-- Right Main Studio Canvas -->
-    <section class="main-canvas">
-      <!-- Preview Side-by-Side Studio Card -->
-      <div class="preview-card">
-        <div class="preview-header">
-          <div class="section-title" style="margin-bottom: 0;">Interactive Slide Diff Studio</div>
-          <!-- Preview Navigator -->
-          <div class="preview-navigator" id="previewNavigator" style="display: none;">
-            <span class="nav-caption">Slide:</span>
-            <div class="nav-pills" id="navPills">
-              <!-- Dynamically populated slide buttons -->
-            </div>
-          </div>
+    <!-- Pipeline Stepper Progress Bar -->
+    <div class="pipeline-bar-wrapper">
+      <div class="pipeline-stepper" aria-label="Pipeline Status Stages">
+        <div class="step-item active" data-step="INGEST">
+          <div class="step-circle">1</div>
+          <div class="step-label">Ingest</div>
         </div>
+        <div class="step-item" data-step="PLAN">
+          <div class="step-circle">2</div>
+          <div class="step-label">Plan</div>
+        </div>
+        <div class="step-item" data-step="EXECUTE">
+          <div class="step-circle">3</div>
+          <div class="step-label">Execute</div>
+        </div>
+        <div class="step-item" data-step="VERIFY">
+          <div class="step-circle">4</div>
+          <div class="step-label">Quality Gates</div>
+        </div>
+        <div class="step-item" data-step="REVIEW">
+          <div class="step-circle">5</div>
+          <div class="step-label">Review & Download</div>
+        </div>
+      </div>
+    </div>
 
-        <div class="preview-split">
-          <!-- Before Pane -->
-          <div class="preview-pane">
-            <div class="pane-label">
-              <span style="color: var(--text-muted);">●</span> Original Slide
-              <span class="pane-action-hint" id="paneHintOriginal">(Click-drag rectangle on slide to target region)</span>
-            </div>
-            <div class="slide-frame" id="beforeFrame">
-              <img id="beforeImg" src="" alt="Original Slide Preview" style="display: none;">
-              <div class="selection-overlay-canvas" id="selectionOverlayCanvas">
-                <div class="selection-rect" id="selectionRect" style="display: none;"></div>
-              </div>
-              <div class="empty-placeholder" id="beforePlaceholder">
-                <span>📄 No slide loaded</span>
-              </div>
-            </div>
+    <!-- Bottom Studio Panels: Timeline & QA Findings -->
+    <section class="studio-bottom-panels">
+      <!-- Panel 1: Live Event Timeline Stream -->
+      <div class="panel-card timeline-card">
+        <div class="panel-card-header">
+          <div class="panel-card-title">
+            <span class="card-icon">⏱️</span> Event Timeline
           </div>
-
-          <!-- After Pane -->
-          <div class="preview-pane">
-            <div class="pane-label">
-              <span style="color: var(--accent-primary);">●</span> Modified Slide
-              <span class="diff-badge" id="diffBadge" style="display: none;">Modified</span>
-            </div>
-            <div class="slide-frame" id="afterFrame">
-              <img id="afterImg" src="" alt="Modified Slide Preview" style="display: none;">
-              <div class="highlight-overlay-layer" id="highlightOverlayLayer"></div>
-              <div class="empty-placeholder" id="afterPlaceholder">
-                <span>⚡ Awaiting edits</span>
-              </div>
-            </div>
+          <span class="event-counter" id="eventCounter">0 events</span>
+        </div>
+        <div class="event-timeline-container" id="eventLogs" role="log" aria-live="polite">
+          <div class="timeline-empty" id="timelineEmpty">
+            <span>Studio initialized. Ready for job dispatch.</span>
           </div>
         </div>
       </div>
 
-      <!-- Quality Findings & Defect Cards -->
-      <div class="preview-card">
-        <div class="preview-header">
-          <div class="section-title" style="margin-bottom: 0;">Quality Gates & Findings</div>
+      <!-- Panel 2: Quality Gates & Verification Findings -->
+      <div class="panel-card findings-card">
+        <div class="panel-card-header">
+          <div class="panel-card-title">
+            <span class="card-icon">🛡️</span> QA Findings & Verification
+          </div>
+          <span class="qa-status-tag" id="qaStatusTag">Pending</span>
         </div>
         <div class="findings-grid" id="findingsContainer">
-          <div style="color: var(--text-muted); font-size: 0.85rem;">
-            Run a slide edit to view automated structural & visual verification results.
+          <div class="findings-empty" id="findingsEmpty">
+            <span>Structural & visual gate results will appear here after edit verification.</span>
           </div>
-        </div>
-      </div>
-
-      <!-- Human Review Action Bar -->
-      <div class="action-bar" id="actionBar" style="display: none;">
-        <div>
-          <div style="font-weight: 600; font-size: 0.95rem;">Human Review Required</div>
-          <div style="font-size: 0.8rem; color: var(--text-muted);">Please review the before/after slides, changed overlays, and findings above before finalizing.</div>
-        </div>
-        <div class="action-buttons">
-          <button class="btn-danger" id="btnReject">Discard & Reject</button>
-          <button class="btn-warning" id="btnRepair">Request AI Fix</button>
-          <button class="btn-success" id="btnApprove">✓ Approve & Download</button>
         </div>
       </div>
     </section>
   </main>
+
+  <!-- Floating Human Review & Final Download Bar -->
+  <footer class="action-bar" id="actionBar" style="display: none;" role="region" aria-label="Human Review Actions">
+    <div class="action-bar-info">
+      <div class="action-bar-status">
+        <span class="status-indicator-dot"></span>
+        <span class="action-bar-title" id="actionBarTitle">Human Review Required</span>
+      </div>
+      <div class="action-bar-desc" id="actionBarDesc">
+        Inspect the Before/After slide diff, overlays, and QA findings before finalizing the presentation.
+      </div>
+    </div>
+    <div class="action-buttons">
+      <button class="btn-danger" id="btnReject">
+        <span>✕ Discard & Reject</span>
+      </button>
+      <button class="btn-warning" id="btnRepair">
+        <span>🔄 Request AI Fix</span>
+      </button>
+      <button class="btn-success" id="btnApprove">
+        <span>✓ Approve & Download</span>
+      </button>
+    </div>
+  </footer>
 
   <script src="/static/js/workbench.js"></script>
 </body>
