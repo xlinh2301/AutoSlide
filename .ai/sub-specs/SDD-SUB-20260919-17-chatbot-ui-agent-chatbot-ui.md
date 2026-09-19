@@ -2,7 +2,7 @@
 id: SDD-SUB-20260919-17
 title: Always-on Chatbot UI and End-to-End Verification
 author: agent-chatbot-ui
-status: DRAFT # DRAFT | REVIEW | APPROVED | MERGED | COMPLETED
+status: APPROVED # DRAFT | REVIEW | APPROVED | MERGED | COMPLETED
 main_spec: "[[.ai/specs/ADS-002/requirements.md]]"
 summary: "Implement always-on conversational chatbot rail, interactive cards (QuestionCard, PlanCard, SourceCard, ExecutionCard, ReviewCard, ErrorCard), selection context binding, and browser smoke verification flow."
 decisions:
