@@ -26,6 +26,7 @@ from autoslide.conversation.schemas import (
     SessionDetailResponse,
     SessionEventsResponse,
 )
+from autoslide.conversation.provenance import ProvenanceStore
 from autoslide.conversation.state import TRANSITION_RULES, validate_transition
 from autoslide.conversation.store import SessionStore
 
@@ -42,6 +43,7 @@ __all__ = [
     "CreateSessionResponse",
     "EditBrief",
     "ExecuteSessionResponse",
+    "ProvenanceStore",
     "Question",
     "SelectionContext",
     "SendMessageRequest",

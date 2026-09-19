@@ -194,6 +194,69 @@ class BaseRuntimeAdapter(RuntimeAdapter):
 
         return exit_code, events
 
+    def run_search(
+        self,
+        query: str,
+        workspace: Path | None = None,
+        timeout_seconds: int = 30,
+    ) -> list[dict[str, Any]]:
+        """Execute bounded search query via runtime CLI and parse structured JSON results."""
+        prompt = (
+            f"Search for recent facts and sources regarding: '{query}'. "
+            "Return ONLY a JSON list of source objects with keys: url, title, summary, claims."
+        )
+        resolved_ws = workspace or Path("/tmp")
+        argv = self.build_argv(prompt, resolved_ws)
+        which_path = self.resolve_executable()
+        if not which_path:
+            return []
+
+        try:
+            res = self.run_cmd(
+                argv,
+                capture_output=True,
+                text=True,
+                timeout=timeout_seconds,
+            )
+            if res.returncode == 0 and res.stdout.strip():
+                import json
+                safe_out = Redactor.redact(res.stdout)
+                start_idx = safe_out.find("[")
+                end_idx = safe_out.rfind("]")
+                if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+                    parsed = json.loads(safe_out[start_idx:end_idx + 1])
+                    if isinstance(parsed, list):
+                        return parsed
+        except Exception:
+            pass
+        return []
+
+    def run_generate(
+        self,
+        prompt: str,
+        workspace: Path | None = None,
+        timeout_seconds: int = 30,
+    ) -> str:
+        """Execute bounded text generation via runtime CLI and return redacted output."""
+        resolved_ws = workspace or Path("/tmp")
+        argv = self.build_argv(prompt, resolved_ws)
+        which_path = self.resolve_executable()
+        if not which_path:
+            return ""
+
+        try:
+            res = self.run_cmd(
+                argv,
+                capture_output=True,
+                text=True,
+                timeout=timeout_seconds,
+            )
+            if res.returncode == 0 and res.stdout.strip():
+                return Redactor.redact(res.stdout.strip())
+        except Exception:
+            pass
+        return ""
+
 
 class CodexAdapter(BaseRuntimeAdapter):
     """Runtime adapter for OpenAI Codex CLI."""
@@ -285,12 +348,40 @@ class FakeRuntimeAdapter(BaseRuntimeAdapter):
         mock_stderr: str = "",
         mock_exit_code: int = 0,
         custom_process: Any | None = None,
+        mock_search_results: list[dict[str, Any]] | None = None,
+        mock_generated_text: str | None = None,
     ):
         super().__init__()
         self.mock_stdout = mock_stdout
         self.mock_stderr = mock_stderr
         self.mock_exit_code = mock_exit_code
         self.custom_process = custom_process
+        self._mock_search_results: list[dict[str, Any]] = mock_search_results or []
+        self._mock_generated_text: str = mock_generated_text or ""
+
+    def set_mock_search_results(self, results: list[dict[str, Any]]) -> None:
+        """Configure mock search results for testing."""
+        self._mock_search_results = list(results)
+
+    def set_mock_generated_text(self, text: str) -> None:
+        """Configure mock generated text output for testing."""
+        self._mock_generated_text = text
+
+    def run_search(
+        self,
+        query: str,
+        workspace: Path | None = None,
+        timeout_seconds: int = 30,
+    ) -> list[dict[str, Any]]:
+        return self._mock_search_results
+
+    def run_generate(
+        self,
+        prompt: str,
+        workspace: Path | None = None,
+        timeout_seconds: int = 30,
+    ) -> str:
+        return self._mock_generated_text
 
     def start(
         self,

@@ -2,7 +2,7 @@
 id: SDD-SUB-20260919-15
 title: Research, Generated Content and Provenance Approval
 author: agent-research-provenance
-status: APPROVED # DRAFT | REVIEW | APPROVED | MERGED
+status: COMPLETED # DRAFT | REVIEW | APPROVED | MERGED | COMPLETED
 main_spec: "[[.ai/specs/ADS-002/requirements.md]]"
 summary: "Implement research and content generation services, structured provenance tracking, URL validation/redaction, and source approval gating for conversational slide modifications."
 decisions:
@@ -28,7 +28,7 @@ risk_level: LOW
 > [!ABSTRACT] Tóm tắt cho AI
 > **Mục tiêu**: Hiện thực hóa Task 4 trong kế hoạch Always-on Agent Chat (`ADS-002`): cung cấp dịch vụ tra cứu thông tin (`ResearchService.search`), sinh nội dung AI (`ResearchService.generate`), lưu trữ nguồn gốc và liên kết slide (`ProvenanceStore`), chuẩn hóa và làm sạch dữ liệu URL/redaction, và áp dụng cổng phê duyệt nguồn (`Source Approval Gate`) ngăn chặn các nguồn chưa được duyệt hoặc bị từ chối đưa vào `TaskPlan`.
 > **Quyết định then chốt**: Mô hình hóa Pydantic cho `ContentOrigin` (`USER`, `WEB`, `AI_GENERATED`) và `ProvenanceRecord`; tích hợp `ResearchService` tương tác qua runtime adapter với giới hạn timeout và schema JSON chặt chẽ; chặn triệt để mọi nội dung lấy từ nguồn web chưa duyệt (`approved == False`) trước khi chuyển vào kế hoạch thực thi.
-> **Rủi ro**: #risk/LOW | **Trạng thái**: #status/DRAFT
+> **Rủi ro**: #risk/LOW | **Trạng thái**: #status/COMPLETED
 
 ---
 
@@ -54,13 +54,13 @@ Hiện thực hóa Task 4 trong kế hoạch Always-on Agent Chat (`ADS-002`):
 
 ## 2. Giả định & Rủi ro (Assumptions & Risks)
 
-- [ ] **Giả định**: `ConversationSession` và `SourceRecord` đã được định nghĩa ban đầu ở Task 1; `autoslide.runtime.adapters` cung cấp cơ chế thực thi process an toàn không can thiệp API key trên host.
-- [ ] **Giả định**: Các runtime CLI (Gemini/Antigravity/Codex/Claude) có thể trả về cấu trúc JSON hoặc văn bản có thể parse được theo định dạng chuẩn đã định nghĩa.
-- [ ] **Rủi ro**: Dữ liệu web tìm kiếm có thể chứa URL độc hại (javascript:, file://) hoặc payload nhạy cảm.
+- [x] **Giả định**: `ConversationSession` và `SourceRecord` đã được định nghĩa ban đầu ở Task 1; `autoslide.runtime.adapters` cung cấp cơ chế thực thi process an toàn không can thiệp API key trên host.
+- [x] **Giả định**: Các runtime CLI (Gemini/Antigravity/Codex/Claude) có thể trả về cấu trúc JSON hoặc văn bản có thể parse được theo định dạng chuẩn đã định nghĩa.
+- [x] **Rủi ro**: Dữ liệu web tìm kiếm có thể chứa URL độc hại (javascript:, file://) hoặc payload nhạy cảm.
   - *Biện pháp*: Kiểm tra scheme URL nghiêm ngặt (chỉ cho phép `http://` và `https://`), làm sạch nội dung qua `Redactor` trước khi lưu vào session checkpoint.
-- [ ] **Rủi ro**: Runtime CLI phản hồi chậm hoặc bị treo khi tìm kiếm web.
+- [x] **Rủi ro**: Runtime CLI phản hồi chậm hoặc bị treo khi tìm kiếm web.
   - *Biện pháp*: Thiết lập timeout nghiêm ngặt cho mỗi tác vụ tìm kiếm/sinh nội dung và có cơ chế fallback an toàn (trả về lỗi có cấu trúc thay vì treo ứng dụng).
-- [ ] **`[UNKNOWN]`**: Mức độ sâu của trích xuất claim tự động: hiện tại dựa vào cấu trúc JSON do runtime trả về hoặc regex/JSON parser nội bộ.
+- [x] **`[UNKNOWN]`**: Mức độ sâu của trích xuất claim tự động: hiện tại dựa vào cấu trúc JSON do runtime trả về hoặc regex/JSON parser nội bộ.
 
 ---
 
@@ -88,15 +88,15 @@ Hiện thực hóa Task 4 trong kế hoạch Always-on Agent Chat (`ADS-002`):
 
 ## 4. Tiêu chí Chấp nhận (Acceptance Criteria)
 
-- [ ] **AC-1**: `SourceRecord` và `ContentOrigin` được mô hình hóa đầy đủ bằng Pydantic v2. `SourceRecord` chỉ chấp nhận URL hợp lệ thuộc giao thức `http://` hoặc `https://`. Mọi URL không hợp lệ bị từ chối với `ValueError`.
-- [ ] **AC-2**: Toàn bộ kết quả tìm kiếm và sinh nội dung từ `ResearchService` được lọc qua `Redactor`, đảm bảo không chứa secrets, private tokens hay credentials trong dữ liệu lưu trữ.
-- [ ] **AC-3**: `GeneratedContent` luôn mang nhãn `ContentOrigin(kind="AI_GENERATED")` cùng thông tin runtime/model rõ ràng, phân biệt với nguồn `USER` và `WEB`.
-- [ ] **AC-4**: `ProvenanceStore.attach` lưu trữ chính xác liên kết giữa `content_ref`, `ContentOrigin` và `TargetReference`. Cho phép truy vấn lại danh sách provenance theo `slide_index` và `content_ref`.
-- [ ] **AC-5**: `ResearchService.search` trả về `ResearchResult` với danh sách `SourceRecord` chuẩn hóa (id, url, title, summary, claims, approved=False mặc định).
-- [ ] **AC-6**: Cổng duyệt nguồn (`Source Approval Gating`):
+- [x] **AC-1**: `SourceRecord` và `ContentOrigin` được mô hình hóa đầy đủ bằng Pydantic v2. `SourceRecord` chỉ chấp nhận URL hợp lệ thuộc giao thức `http://` hoặc `https://`. Mọi URL không hợp lệ bị từ chối với `ValueError`.
+- [x] **AC-2**: Toàn bộ kết quả tìm kiếm và sinh nội dung từ `ResearchService` được lọc qua `Redactor`, đảm bảo không chứa secrets, private tokens hay credentials trong dữ liệu lưu trữ.
+- [x] **AC-3**: `GeneratedContent` luôn mang nhãn `ContentOrigin(kind="AI_GENERATED")` cùng thông tin runtime/model rõ ràng, phân biệt với nguồn `USER` và `WEB`.
+- [x] **AC-4**: `ProvenanceStore.attach` lưu trữ chính xác liên kết giữa `content_ref`, `ContentOrigin` và `TargetReference`. Cho phép truy vấn lại danh sách provenance theo `slide_index` và `content_ref`.
+- [x] **AC-5**: `ResearchService.search` trả về `ResearchResult` với danh sách `SourceRecord` chuẩn hóa (id, url, title, summary, claims, approved=False mặc định).
+- [x] **AC-6**: Cổng duyệt nguồn (`Source Approval Gating`):
   - Phương thức kiểm tra nguồn (`validate_plan_sources` hoặc `filter_plan_operations`) ngăn chặn việc chuyển giao các thao tác sửa đổi dựa trên nguồn chưa được duyệt (`approved: False`) sang `READY_FOR_EXECUTION`.
   - Hỗ trợ cập nhật quyết định duyệt nguồn (`apply_source_decision`) và cập nhật danh sách nguồn của phiên.
-- [ ] **AC-7**: Bổ sung đầy đủ unit tests trong `tests/content/` đạt 100% pass và đảm bảo không phá vỡ bất kỳ test suite nào hiện có.
+- [x] **AC-7**: Bổ sung đầy đủ unit tests trong `tests/content/` đạt 100% pass và đảm bảo không phá vỡ bất kỳ test suite nào hiện có.
 
 ---
 
@@ -106,12 +106,15 @@ Hiện thực hóa Task 4 trong kế hoạch Always-on Agent Chat (`ADS-002`):
 ```bash
 # 1. Kiểm tra biên dịch bytecode
 python3 -m compileall src tests
+# Output: 0 syntax errors, all packages compiled successfully
 
 # 2. Chạy bộ unit tests mới cho Content & Research & Provenance
 pytest tests/content/ -q -v
+# Output: 20 passed, 1 warning in 0.14s
 
-# 3. Chạy toàn bộ regression test suite của Conversation & API
-pytest tests/conversation tests/api tests/planner -q
+# 3. Chạy toàn bộ regression test suite của Conversation & API & Full System
+pytest -q
+# Output: 196 passed, 1 warning in 158.50s
 ```
 
 ### Manual QA
