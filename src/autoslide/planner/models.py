@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Literal, Union
+from typing import Annotated, Any, Literal, Union
 from pydantic import BaseModel, Field
 
 from autoslide.planner.vocabulary import OperationType
@@ -112,3 +112,16 @@ class TaskPlan(BaseModel):
     operations: list[EditOperation] = Field(default_factory=list)
     requires_review: bool = False
     rationale: str | None = None
+
+    def to_card(self) -> dict[str, Any]:
+        """Convert TaskPlan into a structured card representation for conversational turns."""
+        return {
+            "type": "plan",
+            "schema_version": self.schema_version,
+            "target_scope": [s.model_dump() for s in self.target_scope],
+            "operations": [op.model_dump() for op in self.operations],
+            "requires_review": self.requires_review,
+            "rationale": self.rationale,
+            "operation_count": len(self.operations),
+        }
+
