@@ -20,9 +20,11 @@ from autoslide.ingest.models import (
 )
 from autoslide.ingest.parser import PPTXIngestor
 from autoslide.ingest.renderer import (
+    MINIMAL_PNG_BYTES,
     BasePreviewRenderer,
     LibreOfficePreviewRenderer,
     MockPreviewRenderer,
+    select_preview_renderer,
 )
 from autoslide.ingest.validator import validate_pptx_package
 
@@ -34,6 +36,7 @@ __all__ = [
     "IngestError",
     "InvalidPackageError",
     "LibreOfficePreviewRenderer",
+    "MINIMAL_PNG_BYTES",
     "MockPreviewRenderer",
     "PPTXIngestor",
     "PreviewManifest",
@@ -45,5 +48,6 @@ __all__ = [
     "TextRunInfo",
     "UnsupportedPackageError",
     "compute_shape_fingerprint",
+    "select_preview_renderer",
     "validate_pptx_package",
 ]
