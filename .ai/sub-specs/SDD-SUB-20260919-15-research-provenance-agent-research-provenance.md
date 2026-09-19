@@ -2,7 +2,7 @@
 id: SDD-SUB-20260919-15
 title: Research, Generated Content and Provenance Approval
 author: agent-research-provenance
-status: DRAFT # DRAFT | REVIEW | APPROVED | MERGED
+status: APPROVED # DRAFT | REVIEW | APPROVED | MERGED
 main_spec: "[[.ai/specs/ADS-002/requirements.md]]"
 summary: "Implement research and content generation services, structured provenance tracking, URL validation/redaction, and source approval gating for conversational slide modifications."
 decisions:
