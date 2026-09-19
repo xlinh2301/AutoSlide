@@ -1,7 +1,7 @@
 # Requirements: Always-on Agent Chat for AutoSlide
 
 **Spec ID:** ADS-002  
-**Status:** DRAFT — user design approved; implementation plan pending spec review  
+**Status:** COMPLETED — all capabilities implemented and verified via Release Gate
 **Parent:** ADS-001
 
 ## Objective
@@ -58,15 +58,15 @@ Turn the one-shot AutoSlide edit form into an always-visible agent chatbot. The 
 
 ## Acceptance criteria
 
-- [ ] User can upload a PPTX and start with a free-form prompt.
-- [ ] Agent asks a targeted question for an ambiguous request and does not edit before clarification.
-- [ ] Agent renders a typed plan and waits for explicit approval.
-- [ ] Approved plan can add and delete a slide with structural diff and preview evidence.
-- [ ] Approved plan can add generated content and label its origin.
-- [ ] Web research shows sources before sourced content is inserted.
-- [ ] User can request a follow-up edit in the same chatbot session.
-- [ ] Failed runtime/research/render operations show retry or clarification actions and preserve the last valid checkpoint.
-- [ ] No provider API key is requested, stored or logged.
+- [x] User can upload a PPTX and start with a free-form prompt.
+- [x] Agent asks a targeted question for an ambiguous request and does not edit before clarification.
+- [x] Agent renders a typed plan and waits for explicit approval.
+- [x] Approved plan can add and delete a slide with structural diff and preview evidence.
+- [x] Approved plan can add generated content and label its origin.
+- [x] Web research shows sources before sourced content is inserted.
+- [x] User can request a follow-up edit in the same chatbot session.
+- [x] Failed runtime/research/render operations show retry or clarification actions and preserve the last valid checkpoint.
+- [x] No provider API key is requested, stored or logged.
 
 ## Invariants
 
