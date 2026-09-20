@@ -2,7 +2,7 @@
 id: SDD-SUB-20260920-02
 title: Full-Deck Ingest & Dual-Column Live Render Engine
 author: agent-render
-status: DRAFT # DRAFT | REVIEW | APPROVED | MERGED | COMPLETED
+status: APPROVED # DRAFT | REVIEW | APPROVED | MERGED | COMPLETED
 main_spec: "[[.ai/specs/ADS-003/requirements.md]]"
 summary: "Implement full-deck slide ingestion with 100% thumbnail preview extraction, dual-column Before/After state tracking, delta re-rendering for modified slides, and the GET /api/v1/sessions/{session_id}/deck API endpoint."
 decisions:
