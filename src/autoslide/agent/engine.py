@@ -76,37 +76,90 @@ class AgentEngine:
         tool_calls: list[ToolCallRequest] = []
         msg_lower = message.lower().strip()
 
-        # 1. Edit text intent
-        # e.g., "Sửa tiêu đề slide 1 thành 'Báo cáo Q3'", "Change slide 2 title to Market Overview"
+        def _clean_target_text(text: str) -> str:
+            clean = text.strip("'\"“”‘’ ")
+            clean = re.sub(
+                r"(?:\s+(?:đi|nhé|nha|với|hộ|giúp|nhá|ngay|luôn|cho mình|cho tôi|giúp mình|giúp tôi))+$",
+                "",
+                clean,
+                flags=re.IGNORECASE,
+            )
+            return clean.strip("'\"“”‘’ ")
+
+        # 1. Edit text intent (comprehensive natural Vietnamese & English patterns)
+        # e.g., "sửa lại title slide 1 là ABC đi", "sửa title 1 thành ABC", "đổi tiêu đề slide 2 thành Kết luận"
         edit_patterns = [
-            r"(?:sửa|thay|đổi|chỉnh|edit|change|replace|update)\s+(?:tiêu đề|text|nội dung|chữ)?\s*(?:ở|trên|tại|slide)?\s*(\d+)?\s*(?:thành|to|with)?\s*['\"]([^'\"]+)['\"]",
-            r"(?:sửa|thay|đổi|chỉnh|edit|change|update)\s+slide\s+(\d+)\s*(?:tiêu đề|text|nội dung)?\s*(?:thành|to|sang|:)?\s*['\"]?([^'\"\n]+)['\"]?",
-            r"(?:sửa|thay|đổi|chỉnh|edit|change|update)\s+(?:tiêu đề|text|nội dung)\s*(?:thành|to|:)?\s*['\"]?([^'\"\n]+)['\"]?",
+            r"(?:sửa\s+lại|sửa|đổi\s+lại|đổi|thay\s+đổi|thay|chỉnh\s+sửa|chỉnh|cập\s+nhật|update|edit|change|replace)\s+(?:lại\s+)?(?:tiêu\s+đề|title|heading|text|nội\s+dung|chữ)?\s*(?:ở|trên|tại|của)?\s*(?:slide|trang)?\s*(\d+)?\s*(?:tiêu\s+đề|title|heading)?\s*(?:thành|to|sang|là|=|bằng|thành\s+là|with|:)\s*['\"“”]?([^'\"\n]+)['\"“”]?",
+            r"(?:sửa\s+lại|sửa|đổi\s+lại|đổi|thay|chỉnh)\s+slide\s+(\d+)\s*(?:tiêu\s+đề|title|text|nội\s+dung)?\s*(?:thành|to|sang|là|=|bằng|:)\s*['\"“”]?([^'\"\n]+)['\"“”]?",
+            r"(?:sửa\s+lại|sửa|đổi\s+lại|đổi|thay|chỉnh)\s+(?:tiêu\s+đề|title|text|nội\s+dung)\s*(?:thành|to|sang|là|=|bằng|:)\s*['\"“”]?([^'\"\n]+)['\"“”]?",
         ]
-        
-        # Check add slide intent
+
+        # 2. Consecutive confirmation intent (e.g., "sửa đi", "ok sửa đi", "làm đi", "tiến hành đi")
+        confirm_patterns = [
+            r"^(?:ok\s+|dạ\s+|vâng\s+)?(?:sửa|làm|thực hiện|tiến hành|áp dụng|chỉnh|thay đổi)\s*(?:đi|nhé|nha|luôn|ngay)?$",
+            r"^(?:ok|đồng ý|được|tiến hành|sửa đi)$",
+        ]
+        if any(re.search(p, msg_lower) for p in confirm_patterns):
+            if session and session.turns:
+                for turn in reversed(session.turns):
+                    if turn.role == "user" and turn.content:
+                        for p in edit_patterns:
+                            m_prev = re.search(p, turn.content, re.IGNORECASE)
+                            if m_prev:
+                                s_idx = int(m_prev.group(1)) if (m_prev.group(1) and m_prev.group(1).isdigit()) else 1
+                                raw_val = m_prev.group(2) if len(m_prev.groups()) >= 2 and m_prev.group(2) else m_prev.group(1)
+                                cleaned = _clean_target_text(raw_val)
+                                if cleaned:
+                                    tool_calls.append(ToolCallRequest(
+                                        tool_name="edit_slide_text",
+                                        arguments={
+                                            "slide_index": s_idx,
+                                            "target": "title",
+                                            "new_text": cleaned,
+                                        },
+                                    ))
+                                    return tool_calls
+
+        # 3. Beautify / Custom theme intent (e.g., "custom sao cho đẹp tí", "làm đẹp slide 1", "sao cũng đc")
+        beautify_patterns = [
+            r"(?:custom|làm đẹp|tối ưu|thiết kế|format|style|chỉnh lại|trang trí)\s*(?:cho\s+)?(?:đẹp|xịn|hiện đại|chuẩn canva|tươi)?",
+            r"^(?:sao cũng đ(?:ược|c)|thế nào cũng đ(?:ược|c)|tùy bạn)$",
+        ]
+        if any(re.search(p, msg_lower) for p in beautify_patterns):
+            s_idx = 1
+            if getattr(context, "selected_slide_index", None):
+                s_idx = int(context.selected_slide_index)
+            s_match = re.search(r"(?:slide|trang)\s*(\d+)", msg_lower)
+            if s_match:
+                s_idx = int(s_match.group(1))
+            tool_calls.append(ToolCallRequest(
+                tool_name="update_slide_style",
+                arguments={"slide_index": s_idx, "theme": "clean_light"},
+            ))
+            return tool_calls
+
+        # 4. Check add slide intent
         add_patterns = [
             r"(?:thêm|tạo|add|create|insert)\s+(?:slide|trang)\s*(?:mới|mới có)?\s*(?:tiêu đề|với tiêu đề|titled|title)?\s*['\"]?([^'\"\n,]+)['\"]?",
             r"(?:thêm|tạo|add|create)\s+slide\s+(?:kết luận|mở đầu|tổng kết|conclusion|intro)",
         ]
 
-        # Check delete slide intent
+        # 5. Check delete slide intent
         delete_patterns = [
             r"(?:xóa|bỏ|delete|remove)\s+(?:slide|trang)\s*(\d+)",
         ]
 
-        # Check reorder intent
+        # 6. Check reorder intent
         reorder_patterns = [
             r"(?:chuyển|di chuyển|đổi chỗ|move|reorder)\s+(?:slide|trang)\s*(\d+)\s*(?:sang|đến|to|vào vị trí)\s*(?:slide|trang)?\s*(\d+)",
         ]
 
-        # Check theme/style intent
+        # 7. Check theme/style intent
         style_patterns = [
             r"(?:đổi theme|đổi màu|đổi phong cách|áp dụng theme|change theme|apply theme|style)\s*(?:slide\s*(\d+))?\s*(?:thành|sang|to)?\s*(modern_dark|clean_light|corporate_blue|vibrant_accent|tối|sáng|xanh|tím)",
         ]
 
-        # Check slide content Q&A intent
-        # e.g., 'slide X có gì', 'nội dung slide X', 'tóm tắt slide X', 'trên slide X có những gì'
+        # 8. Check slide content Q&A intent
         slide_qa_patterns = [
             r"(?:trên|ở|trong)?\s*(?:slide|trang)\s*(\d+)?\s*(?:có gì|có những gì|nội dung gì|viết gì|gồm những gì|nói về gì|nói về cái gì|là gì|thế nào)",
             r"(?:nội dung|tóm tắt|chi tiết|thông tin|phân tích)\s+(?:của\s+|trên\s+)?(?:slide|trang)\s*(\d+)?",
@@ -117,12 +170,12 @@ class AgentEngine:
             r"^(?:có gì|có những gì|nội dung là gì|nội dung gì|nói về gì|thông tin gì|tóm tắt|xem nội dung|chi tiết)$",
         ]
 
-        # Check calculation / analysis intent
+        # 9. Check calculation / analysis intent
         analysis_patterns = [
             r"(?:tính|phân tích|đếm|tổng|trung bình|thống kê|analyze|count|calculate|sum|average)",
         ]
 
-        # Check search web intent
+        # 10. Check search web intent
         search_patterns = [
             r"(?:tìm kiếm|tra cứu|search web|search|google|tra trên mạng)\s*(?:về|cho)?\s*['\"]?([^'\"]+)['\"]?",
         ]
@@ -196,21 +249,23 @@ class AgentEngine:
         for p in edit_patterns:
             m = re.search(p, msg_lower)
             if m:
-                s_idx = int(m.group(1)) if (m.group(1) and m.group(1).isdigit()) else 1
+                s_idx = int(m.group(1)) if (m.group(1) and m.group(1).isdigit()) else (getattr(context, "selected_slide_index", None) or 1)
                 new_text = m.group(2) if len(m.groups()) >= 2 and m.group(2) else (m.group(1) if m.group(1) and not m.group(1).isdigit() else "Updated Title")
-                # Preserve original casing if matched from original message
+                # Match original casing from message
                 orig_match = re.search(re.escape(new_text), message, re.IGNORECASE)
                 final_text = orig_match.group(0) if orig_match else new_text
+                final_clean = _clean_target_text(final_text)
 
-                tool_calls.append(ToolCallRequest(
-                    tool_name="edit_slide_text",
-                    arguments={
-                        "slide_index": s_idx,
-                        "target": "title",
-                        "new_text": final_text.strip("'\""),
-                    },
-                ))
-                return tool_calls
+                if final_clean:
+                    tool_calls.append(ToolCallRequest(
+                        tool_name="edit_slide_text",
+                        arguments={
+                            "slide_index": int(s_idx),
+                            "target": "title",
+                            "new_text": final_clean,
+                        },
+                    ))
+                    return tool_calls
 
         # Evaluate slide content Q&A
         for p in slide_qa_patterns:

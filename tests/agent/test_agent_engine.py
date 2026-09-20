@@ -158,3 +158,56 @@ def test_agent_engine_slide_qa_intent(agent_engine_setup):
         assert f"Nội dung trên Slide {expected_idx} bao gồm:" in resp.assistant_message
         assert "Tôi đã ghi nhận yêu cầu" not in resp.assistant_message
 
+
+def test_agent_engine_natural_language_edit_intents(agent_engine_setup):
+    """Test flexible natural language edit commands with conversational particles."""
+    engine, session, context = agent_engine_setup
+
+    test_cases = [
+        ("sửa lại title slide 1 là ABC đi", 1, "ABC"),
+        ("sửa lại title slide 1 là ABC", 1, "ABC"),
+        ("sửa title slide 1 là ABC đi", 1, "ABC"),
+        ("đổi tiêu đề slide 1 thành ABC", 1, "ABC"),
+        ("sửa slide 1 thành ABC", 1, "ABC"),
+        ("thay title slide 1 bằng ABC", 1, "ABC"),
+        ("sửa lại tiêu đề slide 1 thành Báo cáo Kết quả", 1, "Báo cáo Kết quả"),
+    ]
+
+    for msg, expected_slide, expected_text in test_cases:
+        resp = engine.process_message(session=session, message=msg, context=context)
+        assert len(resp.tool_calls) == 1, f"Failed for message: {msg}"
+        call = resp.tool_calls[0]
+        assert call.tool_name == "edit_slide_text"
+        assert call.arguments["slide_index"] == expected_slide
+        assert call.arguments["new_text"] == expected_text
+        assert "Tôi đã cập nhật nội dung trên slide" in resp.assistant_message
+
+
+def test_agent_engine_consecutive_confirmation_memory(agent_engine_setup):
+    """Test that follow-up confirmation 'sửa đi' triggers previously proposed edit from history."""
+    engine, session, context = agent_engine_setup
+    from autoslide.conversation.models import ChatTurn
+
+    # Simulate prior user turn requesting title change
+    prior_turn = ChatTurn(id="turn_prev_1", role="user", content="sửa lại title slide 1 là ABC đi")
+    session_with_history = session.with_turn(prior_turn)
+
+    # Now user says "sửa đi" or "ok sửa đi"
+    for confirm_msg in ["sửa đi", "ok sửa đi", "làm đi"]:
+        resp = engine.process_message(session=session_with_history, message=confirm_msg, context=context)
+        assert len(resp.tool_calls) == 1, f"Failed on confirm: {confirm_msg}"
+        assert resp.tool_calls[0].tool_name == "edit_slide_text"
+        assert resp.tool_calls[0].arguments["slide_index"] == 1
+        assert resp.tool_calls[0].arguments["new_text"] == "ABC"
+
+
+def test_agent_engine_beautify_custom_intent(agent_engine_setup):
+    """Test custom / beautify commands route to update_slide_style."""
+    engine, session, context = agent_engine_setup
+
+    for msg, expected_slide in [("custom sao cho đẹp tí", 1), ("làm đẹp slide 2", 2), ("sao cũng đc", 1)]:
+        resp = engine.process_message(session=session, message=msg, context=context)
+        assert len(resp.tool_calls) == 1, f"Failed on: {msg}"
+        assert resp.tool_calls[0].tool_name == "update_slide_style"
+        assert resp.tool_calls[0].arguments["slide_index"] == expected_slide
+

@@ -618,6 +618,20 @@ def create_app(
                     json.dumps({"modified_slide_indices": sorted(list(existing_mods))}, indent=2),
                     encoding="utf-8",
                 )
+                if working_pptx and working_pptx.exists():
+                    slide_count = 1
+                    try:
+                        from autoslide.ingest.renderer import _extract_slide_titles_and_shapes
+                        t, _, _ = _extract_slide_titles_and_shapes(working_pptx)
+                        slide_count = len(t) or 1
+                    except Exception:
+                        pass
+                    app_renderer.render_slide_delta(
+                        pptx_path=working_pptx,
+                        workspace=workspace,
+                        modified_indices=turn_resp.modified_slide_indices,
+                        slide_count=slide_count,
+                    )
             except Exception:
                 pass
 
