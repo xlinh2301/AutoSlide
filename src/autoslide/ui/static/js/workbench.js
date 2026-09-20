@@ -959,6 +959,10 @@
   function renderDualColumnDeck(deckData) {
     if (!deckData || !deckData.slides) return;
 
+    if (beforePlaceholder) beforePlaceholder.style.display = "none";
+    if (afterPlaceholder) afterPlaceholder.style.display = "none";
+    if (beforeIngestState) beforeIngestState.style.display = "none";
+
     const countText = `${deckData.slide_count} Slides`;
     if (beforeDeckCountBadge) beforeDeckCountBadge.textContent = countText;
     if (afterDeckCountBadge) afterDeckCountBadge.textContent = countText;
@@ -1760,6 +1764,7 @@
       if (imgEl) {
         imgEl.src = url;
         imgEl.style.display = "block";
+        imgEl.style.zIndex = "5";
       }
       if (isBefore) beforeRetryCount = 0;
       else afterRetryCount = 0;

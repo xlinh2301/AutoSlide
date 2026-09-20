@@ -179,6 +179,28 @@ def test_analyze_slide_content_tool(sample_pptx_workspace):
     assert "Scanned" in result.result["analysis"]
 
 
+def test_analyze_slide_content_target_slide(sample_pptx_workspace):
+    """Test analyze_slide_content extracts title, bullets, and shape count for target slide."""
+    pptx_path, context = sample_pptx_workspace
+    registry = ToolRegistry()
+
+    result = registry.execute(
+        "analyze_slide_content",
+        {"slide_index": 1, "query": "slide 1 có gì"},
+        context,
+    )
+
+    assert result.success is True
+    assert result.modified_slide_indices == []
+    assert "title" in result.result
+    assert "bullet_points" in result.result
+    assert "shape_count" in result.result
+    assert "Nội dung trên Slide 1 bao gồm:" in result.result["analysis"]
+    assert "• Tiêu đề:" in result.result["analysis"]
+    assert "• Nội dung chi tiết:" in result.result["analysis"]
+
+
+
 def test_search_web_tool(sample_pptx_workspace):
     """Test search_web returns search findings and references."""
     pptx_path, context = sample_pptx_workspace
