@@ -130,6 +130,16 @@
   const chatContextLabel = document.getElementById("chatContextLabel");
   const btnClearChatContext = document.getElementById("btnClearChatContext");
 
+  // Dual-Column All Slides Elements (ADS-003)
+  const beforeDeckList = document.getElementById("beforeDeckList");
+  const afterDeckList = document.getElementById("afterDeckList");
+  const beforeDeckCountBadge = document.getElementById("beforeDeckCountBadge");
+  const afterDeckCountBadge = document.getElementById("afterDeckCountBadge");
+  const btnModeAgent = document.getElementById("btnModeAgent");
+  const btnModePlan = document.getElementById("btnModePlan");
+  let chatMode = "agent";
+  let currentDeckState = null;
+
   // Local URL caches & Retry management
   let currentBeforeUrl = null;
   let currentAfterUrl = null;
@@ -274,6 +284,22 @@
     if (btnClearChatContext) {
       btnClearChatContext.addEventListener("click", clearChatSelectionContext);
     }
+
+    if (btnModeAgent) {
+      btnModeAgent.addEventListener("click", () => {
+        chatMode = "agent";
+        btnModeAgent.classList.add("active");
+        if (btnModePlan) btnModePlan.classList.remove("active");
+      });
+    }
+
+    if (btnModePlan) {
+      btnModePlan.addEventListener("click", () => {
+        chatMode = "plan";
+        btnModePlan.classList.add("active");
+        if (btnModeAgent) btnModeAgent.classList.remove("active");
+      });
+    }
   }
 
   /* ==========================================================================
@@ -350,6 +376,9 @@
 
       if (chatStatusText) chatStatusText.textContent = "Session Active";
       appendTimelineEvent("SESSION_CREATED", `Conversational session ${activeSessionId} initialized for ${file.name}`);
+
+      // Load initial full-deck Before == After state for Dual-Column Canvas (ADS-003)
+      await loadSessionDeck(activeSessionId);
 
       renderChatTurn({
         role: "assistant",
@@ -431,51 +460,111 @@
     // 2. Render Temporary Loading Turn
     const loadingTurnEl = renderLoadingTurn();
 
-    try {
-      const res = await fetch(`/api/v1/sessions/${activeSessionId}/messages`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: messageText,
-          selection_context: payloadContext,
-        }),
-      });
+    const isLegacyHeuristic = /make the slide presentation look better/i.test(messageText);
+    const hasActiveQuestionCard = document.querySelector(".card-question") !== null;
 
-      if (loadingTurnEl && loadingTurnEl.parentNode) {
-        loadingTurnEl.parentNode.removeChild(loadingTurnEl);
+    if (chatMode === "plan" || isLegacyHeuristic || hasActiveQuestionCard) {
+      // Heuristic multi-turn clarification & plan approval flow (ADS-002 compatibility)
+      try {
+        const res = await fetch(`/api/v1/sessions/${activeSessionId}/messages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: messageText,
+            selection_context: payloadContext,
+          }),
+        });
+
+        if (loadingTurnEl && loadingTurnEl.parentNode) {
+          loadingTurnEl.parentNode.removeChild(loadingTurnEl);
+        }
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || "Error communicating with Agent backend");
+        }
+
+        const respData = await res.json();
+        if (respData.session && respData.session.state) {
+          updateStepper(respData.session.state);
+        }
+
+        // 3. Render Assistant Response & Cards
+        renderChatTurn({
+          role: "assistant",
+          content: respData.assistant_message,
+          cards: respData.cards || [],
+        });
+      } catch (e) {
+        if (loadingTurnEl && loadingTurnEl.parentNode) {
+          loadingTurnEl.parentNode.removeChild(loadingTurnEl);
+        }
+
+        renderChatTurn({
+          role: "assistant",
+          content: "I ran into an issue while processing your request.",
+          cards: [{ type: "error", message: e.message }],
+        });
+      } finally {
+        isChatBusy = false;
+        if (btnSendChat) btnSendChat.disabled = false;
+        if (chatStatusText) chatStatusText.textContent = "Ready";
+        if (chatMessages) chatMessages.scrollTop = chatMessages.scrollHeight;
       }
+    } else {
+      // Real Local Agent Engine chat endpoint (ADS-003)
+      try {
+        const res = await fetch(`/api/v1/sessions/${activeSessionId}/chat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: messageText,
+            selection_context: payloadContext,
+          }),
+        });
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || "Error communicating with Agent backend");
+        if (loadingTurnEl && loadingTurnEl.parentNode) {
+          loadingTurnEl.parentNode.removeChild(loadingTurnEl);
+        }
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || "Error communicating with Real Agent backend");
+        }
+
+        const respData = await res.json();
+        if (respData.state) {
+          updateStepper(respData.state);
+        }
+
+        // Render Assistant message and Tool Calling Cards
+        renderChatTurn({
+          role: "assistant",
+          content: respData.assistant_message,
+          tool_calls: respData.tool_calls || [],
+        });
+
+        // Trigger deck sync if any slide was modified
+        if (respData.modified_slide_indices && respData.modified_slide_indices.length > 0) {
+          appendTimelineEvent("AGENT_MUTATION", `Tool executed. Modified slide(s): ${respData.modified_slide_indices.join(", ")}`);
+          await loadSessionDeck(activeSessionId);
+        }
+      } catch (e) {
+        if (loadingTurnEl && loadingTurnEl.parentNode) {
+          loadingTurnEl.parentNode.removeChild(loadingTurnEl);
+        }
+
+        renderChatTurn({
+          role: "assistant",
+          content: "I ran into an issue while communicating with the Agent Engine.",
+          cards: [{ type: "error", message: e.message }],
+        });
+      } finally {
+        isChatBusy = false;
+        if (btnSendChat) btnSendChat.disabled = false;
+        if (chatStatusText) chatStatusText.textContent = "Ready";
+        if (chatMessages) chatMessages.scrollTop = chatMessages.scrollHeight;
       }
-
-      const respData = await res.json();
-      if (respData.session && respData.session.state) {
-        updateStepper(respData.session.state);
-      }
-
-      // 3. Render Assistant Response & Cards
-      renderChatTurn({
-        role: "assistant",
-        content: respData.assistant_message,
-        cards: respData.cards || [],
-      });
-    } catch (e) {
-      if (loadingTurnEl && loadingTurnEl.parentNode) {
-        loadingTurnEl.parentNode.removeChild(loadingTurnEl);
-      }
-
-      renderChatTurn({
-        role: "assistant",
-        content: "I ran into an issue while processing your request.",
-        cards: [{ type: "error", message: e.message }],
-      });
-    } finally {
-      isChatBusy = false;
-      if (btnSendChat) btnSendChat.disabled = false;
-      if (chatStatusText) chatStatusText.textContent = "Ready";
-      if (chatMessages) chatMessages.scrollTop = chatMessages.scrollHeight;
     }
   }
 
@@ -525,6 +614,16 @@
       textEl.innerHTML = formatMarkdownText(turn.content || "");
       bubbleEl.appendChild(textEl);
 
+      // Render tool_calls attached to this turn (Real Agent Engine ADS-003)
+      if (turn.tool_calls && Array.isArray(turn.tool_calls)) {
+        turn.tool_calls.forEach((tc) => {
+          const callCard = renderToolCallingCard(tc);
+          if (callCard) bubbleEl.appendChild(callCard);
+          const resultCard = renderToolResultCard(tc);
+          if (resultCard) bubbleEl.appendChild(resultCard);
+        });
+      }
+
       // Render Cards attached to this turn
       if (turn.cards && Array.isArray(turn.cards)) {
         turn.cards.forEach((c) => {
@@ -540,6 +639,10 @@
             cardNode = renderExecutionCard(c);
           } else if (cardType === "review") {
             cardNode = renderReviewCard(c);
+          } else if (cardType === "tool_call" || cardType === "tool-call" || cardType === "tool") {
+            cardNode = renderToolCallingCard(c);
+          } else if (cardType === "tool_result" || cardType === "tool-result") {
+            cardNode = renderToolResultCard(c);
           } else if (cardType === "error") {
             cardNode = renderErrorCard(c.message || c.detail || "An error occurred", () => {
               if (chatInput) sendChatMessage(chatInput.value.trim());
@@ -783,6 +886,196 @@
       }
     }
     return card;
+  }
+
+  /* --------------------------------------------------------------------------
+     Tool Calling Cards & Dual-Column Deck Synchronization (ADS-003)
+     -------------------------------------------------------------------------- */
+  function renderToolCallingCard(toolCall) {
+    if (!toolCall) return null;
+    const card = document.createElement("div");
+    card.className = "tool-calling-card card-tool-call";
+    const toolName = toolCall.tool_name || "Agent Tool";
+    const status = toolCall.status || (toolCall.success ? "completed" : (toolCall.error ? "error" : "executing"));
+    const badgeClass = status === "completed" ? "tool-badge-success" : (status === "error" ? "tool-badge-error" : "tool-badge-executing");
+    const badgeText = status === "completed" ? "COMPLETED" : (status === "error" ? "FAILED" : "RUNNING");
+
+    let argsStr = "";
+    if (toolCall.arguments) {
+      argsStr = typeof toolCall.arguments === "object" ? JSON.stringify(toolCall.arguments, null, 2) : String(toolCall.arguments);
+    }
+
+    card.innerHTML = `
+      <div class="tool-card-header">
+        <div class="tool-card-title">
+          <span>⚡</span>
+          <span>${escapeHtml(toolName)}</span>
+        </div>
+        <span class="tool-card-badge ${badgeClass}">${badgeText}</span>
+      </div>
+      ${argsStr ? `<div class="tool-card-args">${escapeHtml(argsStr)}</div>` : ""}
+    `;
+    return card;
+  }
+
+  function renderToolResultCard(toolCall) {
+    if (!toolCall || (!toolCall.result && !toolCall.modified_slide_indices && !toolCall.error)) return null;
+    const card = document.createElement("div");
+    card.className = "tool-result-card";
+
+    let modifiedTag = "";
+    if (toolCall.modified_slide_indices && toolCall.modified_slide_indices.length > 0) {
+      modifiedTag = `<div class="modified-slides-tag">✨ Slide ${toolCall.modified_slide_indices.join(", ")} Modified</div>`;
+    }
+
+    const resultSummary = toolCall.result ? (typeof toolCall.result === "string" ? toolCall.result : JSON.stringify(toolCall.result)) : (toolCall.error || "Execution completed");
+
+    card.innerHTML = `
+      <div class="tool-result-summary">
+        <span>${toolCall.error ? "⚠️" : "✅"}</span>
+        <span>${escapeHtml(resultSummary)}</span>
+      </div>
+      ${modifiedTag}
+    `;
+    return card;
+  }
+
+  async function loadSessionDeck(sessionId) {
+    if (!sessionId) return;
+    try {
+      const res = await fetch(`/api/v1/sessions/${sessionId}/deck`);
+      if (!res.ok) {
+        console.warn("Failed to fetch deck state:", res.status);
+        return;
+      }
+      const deckData = await res.json();
+      currentDeckState = deckData;
+      renderDualColumnDeck(deckData);
+    } catch (e) {
+      console.warn("Error loading session deck:", e);
+    }
+  }
+
+  function renderDualColumnDeck(deckData) {
+    if (!deckData || !deckData.slides) return;
+
+    const countText = `${deckData.slide_count} Slides`;
+    if (beforeDeckCountBadge) beforeDeckCountBadge.textContent = countText;
+    if (afterDeckCountBadge) afterDeckCountBadge.textContent = countText;
+    if (filmstripCount) filmstripCount.textContent = countText;
+
+    const hasModifications = deckData.modified_slide_indices && deckData.modified_slide_indices.length > 0;
+    if (afterStatusLabel) {
+      afterStatusLabel.textContent = hasModifications ? `Modified (${deckData.modified_slide_indices.length} slides)` : "In Sync (Before == After)";
+    }
+
+    // Render Before Deck List (Original Deck)
+    if (beforeDeckList) {
+      beforeDeckList.innerHTML = "";
+      deckData.slides.forEach((s) => {
+        const card = document.createElement("div");
+        card.className = `deck-slide-card ${s.index === activeSlideIndex ? "active-slide-card" : ""}`;
+        card.dataset.slideIndex = String(s.index);
+
+        card.innerHTML = `
+          <div class="deck-slide-card-header">
+            <span>Slide ${s.index}</span>
+            <span>${escapeHtml(s.title || "")}</span>
+          </div>
+          <div class="deck-slide-card-thumb">
+            ${s.before_url ? `<img src="${s.before_url}" alt="Slide ${s.index} (Before)">` : `<span>S${s.index}</span>`}
+          </div>
+        `;
+
+        card.addEventListener("click", () => selectSlide(s.index));
+        beforeDeckList.appendChild(card);
+      });
+    }
+
+    // Render After Deck List (Modified Deck with Visual Change Highlights)
+    if (afterDeckList) {
+      afterDeckList.innerHTML = "";
+      deckData.slides.forEach((s) => {
+        const card = document.createElement("div");
+        const isModified = s.modified || (deckData.modified_slide_indices && deckData.modified_slide_indices.includes(s.index));
+        card.className = `deck-slide-card ${isModified ? "slide-modified-glow" : ""} ${s.index === activeSlideIndex ? "active-slide-card" : ""}`;
+        card.dataset.slideIndex = String(s.index);
+
+        card.innerHTML = `
+          <div class="deck-slide-card-header">
+            <span>Slide ${s.index}</span>
+            ${isModified ? '<span class="modified-badge">MODIFIED</span>' : '<span>In Sync</span>'}
+          </div>
+          <div class="deck-slide-card-thumb">
+            ${s.after_url ? `<img src="${s.after_url}${isModified ? '?t=' + Date.now() : ''}" alt="Slide ${s.index} (After)">` : `<span>S${s.index}</span>`}
+          </div>
+        `;
+
+        card.addEventListener("click", () => selectSlide(s.index));
+        afterDeckList.appendChild(card);
+      });
+    }
+
+    // Populate or sync slide dropdown
+    populateSlideSelector(deckData.slide_count);
+
+    // Build or update Filmstrip
+    buildFilmstripFromDeck(deckData);
+
+    // Update active slide single frame for compatibility
+    const curSlide = deckData.slides.find((s) => s.index === activeSlideIndex) || deckData.slides[0];
+    if (curSlide) {
+      if (curSlide.before_url) loadPreviewImage("before", curSlide.before_url);
+      if (curSlide.after_url) loadPreviewImage("after", curSlide.after_url);
+      if (diffBadge) {
+        diffBadge.style.display = curSlide.modified ? "inline-block" : "none";
+      }
+    }
+  }
+
+  function buildFilmstripFromDeck(deckData) {
+    if (!filmstripTrack) return;
+    filmstripTrack.innerHTML = "";
+
+    deckData.slides.forEach((s) => {
+      const isModified = s.modified || (deckData.modified_slide_indices && deckData.modified_slide_indices.includes(s.index));
+      const item = document.createElement("div");
+      item.className = `filmstrip-item ${s.index === activeSlideIndex ? "active" : ""}`;
+      item.setAttribute("role", "tab");
+      item.setAttribute("aria-selected", s.index === activeSlideIndex ? "true" : "false");
+
+      const thumb = document.createElement("div");
+      thumb.className = "filmstrip-thumb-preview";
+      const imgUrl = s.after_url || s.before_url;
+      if (imgUrl) {
+        const img = document.createElement("img");
+        img.src = imgUrl;
+        img.alt = `Slide ${s.index}`;
+        thumb.appendChild(img);
+      } else {
+        thumb.textContent = `S${s.index}`;
+      }
+
+      const title = document.createElement("span");
+      title.className = "filmstrip-item-title";
+      title.textContent = `Slide ${s.index}`;
+
+      item.appendChild(thumb);
+      item.appendChild(title);
+
+      if (isModified) {
+        const tag = document.createElement("span");
+        tag.className = "filmstrip-modified-tag";
+        tag.textContent = "Modified";
+        item.appendChild(tag);
+      }
+
+      item.addEventListener("click", () => {
+        selectSlide(s.index);
+      });
+
+      filmstripTrack.appendChild(item);
+    });
   }
 
   /* --------------------------------------------------------------------------
@@ -1268,7 +1561,29 @@
       b.classList.toggle("active", idx + 1 === activeSlideIndex);
     });
 
-    renderSlideDiff(activeSlideIndex);
+    // Update active class in Before & After Deck lists and scroll into view (ADS-003)
+    document.querySelectorAll("#beforeDeckList .deck-slide-card").forEach((card) => {
+      const isCur = card.dataset.slideIndex === String(activeSlideIndex);
+      card.classList.toggle("active-slide-card", isCur);
+      if (isCur) card.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
+
+    document.querySelectorAll("#afterDeckList .deck-slide-card").forEach((card) => {
+      const isCur = card.dataset.slideIndex === String(activeSlideIndex);
+      card.classList.toggle("active-slide-card", isCur);
+      if (isCur) card.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
+
+    if (previewDiffData && previewDiffData.slides) {
+      renderSlideDiff(activeSlideIndex);
+    } else if (currentDeckState && currentDeckState.slides) {
+      const curSlide = currentDeckState.slides.find((s) => s.index === activeSlideIndex);
+      if (curSlide) {
+        if (curSlide.before_url) loadPreviewImage("before", curSlide.before_url);
+        if (curSlide.after_url) loadPreviewImage("after", curSlide.after_url);
+        if (diffBadge) diffBadge.style.display = curSlide.modified ? "inline-block" : "none";
+      }
+    }
   }
 
   function populateSlideSelector(totalSlides) {

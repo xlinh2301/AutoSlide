@@ -598,6 +598,24 @@ def create_app(
             except Exception:
                 pass
 
+        if workspace and turn_resp.modified_slide_indices:
+            try:
+                workspace.artifacts_dir.mkdir(parents=True, exist_ok=True)
+                deck_state_file = workspace.artifacts_dir / "deck_state.json"
+                existing_mods = set()
+                if deck_state_file.exists():
+                    try:
+                        existing_mods = set(json.loads(deck_state_file.read_text(encoding="utf-8")).get("modified_slide_indices", []))
+                    except Exception:
+                        pass
+                existing_mods.update(turn_resp.modified_slide_indices)
+                deck_state_file.write_text(
+                    json.dumps({"modified_slide_indices": sorted(list(existing_mods))}, indent=2),
+                    encoding="utf-8",
+                )
+            except Exception:
+                pass
+
         saved_session = app_session_store.save(final_session)
 
         app_event_log.append(
