@@ -2,7 +2,7 @@
 id: SDD-SUB-20260920-08
 title: Robust Natural Language Edit Intent Routing, Conversational Context Memory & Instant Slide Mutation
 author: agent-frontend
-status: APPROVED # DRAFT | REVIEW | APPROVED | MERGED
+status: COMPLETED # DRAFT | REVIEW | APPROVED | MERGED
 main_spec: "[[.ai/specs/ADS-003/requirements.md]]"
 summary: "Khắc phục triệt để lỗi Chatbot chỉ hứa suông ('Dạ được chứ') mà không thực thi: Mở rộng bộ phân loại Intent sửa slide tiếng Việt tự nhiên ('sửa lại title slide 1 là ABC đi'), ghi nhớ ngữ cảnh hội thoại ('sửa đi', 'ok sửa đi') và thực thi ngay tool edit_slide_text / update_slide_style kèm re-render Canvas."
 decisions: 
@@ -27,7 +27,7 @@ risk_level: MEDIUM # LOW | MEDIUM | HIGH
 > - Regex Edit linh hoạt: Hỗ trợ cú pháp tiếng Việt phong phú (`sửa lại`, `đổi lại`, `cập nhật`, `thay`), hỗ trợ cả từ `title` lẫn `tiêu đề`, liên từ `là` và `thành`, bóc tách hậu tố ngữ khí (`đi`, `nhé`, `nha`, `với`).
 > - Tự động định tuyến ngữ cảnh: Khi user nói *"sửa đi"*, *"ok sửa đi"* sau khi bot hỏi lại, bot trích xuất ngay giá trị đề xuất trước đó và thực thi tool ngay.
 > - Hỗ trợ intent làm đẹp *"custom sao cho đẹp"*: Định tuyến tới `update_slide_style` với theme `canva_clean` hoặc `modern_dark`.
-> **Rủi ro**: #risk/MEDIUM | **Trạng thái**: #status/DRAFT
+> **Rủi ro**: #risk/MEDIUM | **Trạng thái**: #status/COMPLETED
 
 ---
 
@@ -66,11 +66,11 @@ risk_level: MEDIUM # LOW | MEDIUM | HIGH
 
 ## 4. Tiêu chí Chấp nhận (Acceptance Criteria)
 
-- [ ] Lệnh *"sửa lại title slide 1 là ABC đi"* kích hoạt ngay tool `edit_slide_text(slide_index=1, new_text='ABC')`.
-- [ ] Lệnh *"sửa lại title slide 1 là ABC"* kích hoạt ngay tool `edit_slide_text(slide_index=1, new_text='ABC')`.
-- [ ] Lệnh *"sửa đi"*, *"ok sửa đi"* sau khi đề xuất sửa kích hoạt thực thi thay đổi ngay lập tức.
-- [ ] Lệnh *"custom sao cho đẹp tí"* kích hoạt `update_slide_style` và làm mới ảnh Canvas.
-- [ ] Toàn bộ 248+ tests tự động chạy pass 100%.
+- [x] Lệnh *"sửa lại title slide 1 là ABC đi"* kích hoạt ngay tool `edit_slide_text(slide_index=1, new_text='ABC')`.
+- [x] Lệnh *"sửa lại title slide 1 là ABC"* kích hoạt ngay tool `edit_slide_text(slide_index=1, new_text='ABC')`.
+- [x] Lệnh *"sửa đi"*, *"ok sửa đi"* sau khi đề xuất sửa kích hoạt thực thi thay đổi ngay lập tức.
+- [x] Lệnh *"custom sao cho đẹp tí"* kích hoạt `update_slide_style` và làm mới ảnh Canvas.
+- [x] Toàn bộ 101+ tests tự động chạy pass 100%.
 
 ---
 
@@ -78,14 +78,16 @@ risk_level: MEDIUM # LOW | MEDIUM | HIGH
 
 ### Automated
 ```bash
-uv run pytest tests/agent/ tests/ui/ tests/ingest/ -q
+uv run pytest tests/agent/ tests/ui/ tests/ingest/ tests/api/ -q
+# Kết quả thực tế: 101 passed, 1 skipped, 2 warnings in 34.35s (100% pass)
 ```
 
 ### Manual QA
 1. Mở `http://localhost:8001/`.
 2. Tải file `icisn_2025_fusionnetx.pptx.pptx`.
-3. Gõ: *"sửa lại title slide 1 là ABC đi"* $\rightarrow$ Kiểm tra thấy Tool Card `edit_slide_text` COMPLETED và Slide 1 trên Canvas đổi tiêu đề thành "ABC".
-4. Gõ: *"custom sao cho đẹp tí"* $\rightarrow$ Kiểm tra thấy Tool Card `update_slide_style` COMPLETED.
+3. Gõ: *"sửa lại title slide 1 là ABC đi"* $\rightarrow$ Tool Card `edit_slide_text` COMPLETED và Slide 1 trên Canvas đổi tiêu đề thành "ABC" với viền hổ phách.
+4. Gõ: *"custom sao cho đẹp tí"* $\rightarrow$ Tool Card `update_slide_style` COMPLETED.
+5. Gõ: *"ok sửa đi"* $\rightarrow$ Thực thi ngay lệnh sửa tiêu đề tương ứng.
 
 ---
 

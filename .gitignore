@@ -25,3 +25,7 @@ data/
 log.csv
 SESSION_STATE.json
 .agent-event.json
+
+# Git worktrees
+worktree/
+.ai/skills/
