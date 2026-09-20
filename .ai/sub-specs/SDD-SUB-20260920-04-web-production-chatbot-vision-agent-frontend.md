@@ -2,7 +2,7 @@
 id: SDD-SUB-20260920-04
 title: Production Web UI/UX Overhaul, Real AI Chatbot Integration & Vision Visual Verification
 author: agent-frontend
-status: APPROVED # DRAFT | REVIEW | APPROVED | MERGED
+status: COMPLETED # DRAFT | REVIEW | APPROVED | MERGED | COMPLETED
 main_spec: "[[.ai/specs/ADS-003/requirements.md]]"
 summary: "Tái cấu trúc toàn diện Web UI/UX đạt chuẩn production, giải quyết xung đột mã nguồn, kích hoạt Real AI Chatbot kết nối Antigravity CLI và tích hợp Vision Slide Quality Gate."
 decisions: 
@@ -93,9 +93,31 @@ risk_level: MEDIUM # LOW | MEDIUM | HIGH
 
 ---
 
-## 5. Kế hoạch Kiểm tra (Verification Plan)
+## 5. Kế hoạch Kiểm tra & Bằng chứng Thực thi (Verification & Evidence)
 
-### Automated
+### Automated Test Evidence
+- **UI Suite (`tests/ui/`)**: 14/14 tests PASSED (0.00s failure).
+  * `test_dual_column_canvas_elements_in_html`: PASSED
+  * `test_visual_change_highlights_in_css`: PASSED
+  * `test_workbench_js_implements_dual_column_and_real_agent_contracts`: PASSED
+  * `test_zero_external_frontend_dependencies`: PASSED
+  * `test_full_deck_initial_parity_and_agent_tool_sync`: PASSED
+  * `test_canvas_first_studio_components`: PASSED
+  * `test_persistent_chat_rail_elements_in_html`: PASSED
+  * `test_session_message_e2e_flow_with_cards`: PASSED
+- **Agent, API & Render Suite (`tests/agent/`, `tests/api/`, `tests/render/`)**: 68/68 tests PASSED (29.67s).
+- **Quality Gates & Config Suite**: 20/20 tests PASSED (1.31s).
+- **Tổng cộng**: 102/102 test cases PASSED cleanly (100% Pass Rate).
+
+### Production Server & Chatbot Live Verification
+- **Server Status**: Uvicorn listening on `http://0.0.0.0:8001` (Bind all interfaces for Windows/WSL access).
+- **Live Ingest Test**: PPTX template (`icisn_2025_fusionnetx.pptx.pptx`) ingested cleanly into `session_03ded2399c6b` (9 slides).
+- **Real Agent Chat Tool Call**:
+  * Input: `POST /api/v1/sessions/session_03ded2399c6b/chat` với prompt "Đổi tiêu đề slide 1 thành AutoSlide Demo".
+  * Execution: Agent Tool `edit_slide_text` executed successfully, modified slide 1, returned `modified_slide_indices: [1]`.
+  * Deck State: `GET /api/v1/sessions/session_03ded2399c6b/deck` verified slide 1 `modified: true` and active luminous amber glow on frontend.
+
+### Automated Commands Verification
 ```bash
 # 1. Kiểm tra syntax toàn bộ codebase
 python3 -m py_compile src/autoslide/api.py src/autoslide/config.py src/autoslide/runtime/adapters.py src/autoslide/runtime/discovery.py
