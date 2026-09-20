@@ -4,12 +4,17 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
+import io
 import json
 from pathlib import Path
 import shutil
 import subprocess
 import tempfile
 from typing import Any
+import xml.etree.ElementTree as ET
+import zipfile
+
+from PIL import Image, ImageDraw, ImageFont
 
 from autoslide.ingest.errors import RenderError
 from autoslide.ingest.models import (
@@ -26,6 +31,256 @@ MINIMAL_PNG_BYTES = (
     b"\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc\x60\x60\x60\x60"
     b"\x00\x00\x00\x05\x00\x01\xa5\xf6E@\x00\x00\x00\x00IEND\xaeB\x60\x82"
 )
+
+
+def _get_font(size: int, bold: bool = False) -> ImageFont.ImageFont:
+    """Safely obtain font with graceful fallback to default font."""
+    font_candidates = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+        if bold
+        else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf"
+        if bold
+        else "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"
+        if bold
+        else "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "DejaVuSans.ttf",
+        "Arial.ttf",
+    ]
+    for font_path in font_candidates:
+        try:
+            return ImageFont.truetype(font_path, size)
+        except Exception:
+            continue
+    try:
+        return ImageFont.load_default(size=size)
+    except Exception:
+        return ImageFont.load_default()
+
+
+def _extract_slide_titles_and_shapes(pptx_path: Path) -> tuple[dict[int, str], dict[int, int]]:
+    """Safely extract slide titles and shape counts from PPTX if available."""
+    titles: dict[int, str] = {}
+    shape_counts: dict[int, int] = {}
+    if not pptx_path.exists() or not zipfile.is_zipfile(pptx_path):
+        return titles, shape_counts
+    try:
+        with zipfile.ZipFile(pptx_path) as zf:
+            slide_entries = [
+                n
+                for n in zf.namelist()
+                if n.startswith("ppt/slides/slide") and n.endswith(".xml")
+            ]
+            for name in slide_entries:
+                try:
+                    num_str = "".join(filter(str.isdigit, Path(name).stem))
+                    idx = int(num_str) if num_str else len(titles) + 1
+                    xml_content = zf.read(name)
+                    root = ET.fromstring(xml_content)
+                    shapes = root.findall(".//{http://schemas.openxmlformats.org/presentationml/2006/main}sp")
+                    shape_counts[idx] = len(shapes)
+                    title_text = ""
+                    for sp in shapes:
+                        ph = sp.find(".//{http://schemas.openxmlformats.org/presentationml/2006/main}ph")
+                        if ph is not None and ph.get("type") in ("title", "ctrTitle"):
+                            texts = [
+                                t.text
+                                for t in sp.findall(".//{http://schemas.openxmlformats.org/drawingml/2006/main}t")
+                                if t.text
+                            ]
+                            if texts:
+                                title_text = " ".join(texts).strip()
+                                break
+                    if not title_text:
+                        first_texts = [
+                            t.text
+                            for t in root.findall(".//{http://schemas.openxmlformats.org/drawingml/2006/main}t")
+                            if t.text
+                        ]
+                        if first_texts:
+                            candidate = " ".join(first_texts[:3]).strip()
+                            if candidate:
+                                title_text = candidate[:40]
+                    if title_text:
+                        titles[idx] = title_text
+                except Exception:
+                    continue
+    except Exception:
+        pass
+    return titles, shape_counts
+
+
+def generate_mock_slide_card(
+    slide_index: int,
+    title: str | None = None,
+    subtitle: str | None = None,
+    shape_count: int | None = None,
+    is_modified: bool = False,
+    width: int = 1280,
+    height: int = 720,
+) -> bytes:
+    """Generate a rich 16:9 slide card preview image using PIL.Image and PIL.ImageDraw."""
+    # 1. 1280x720 RGB image with dark background (#18181b)
+    img = Image.new("RGB", (width, height), color="#18181b")
+    draw = ImageDraw.Draw(img)
+
+    font_badge = _get_font(15, bold=True)
+    font_title = _get_font(34, bold=True)
+    font_sub = _get_font(18, bold=False)
+
+    # 2. Subtle rounded rectangle border (#27272a)
+    card_margin = 28
+    border_outline = "#f59e0b" if is_modified else "#27272a"
+    border_width = 3 if is_modified else 2
+    draw.rounded_rectangle(
+        [(card_margin, card_margin), (width - card_margin, height - card_margin)],
+        radius=16,
+        outline=border_outline,
+        width=border_width,
+    )
+
+    # Top neon-amber accent indicator bar if modified
+    if is_modified:
+        draw.rounded_rectangle(
+            [
+                (card_margin + 4, card_margin + 4),
+                (width - card_margin - 4, card_margin + 12),
+            ],
+            radius=4,
+            fill="#f59e0b",
+        )
+
+    # 3. Slide badge pill: 'SLIDE X' (#3f3f46 background, #ffffff text)
+    badge_x = card_margin + 36
+    badge_y = card_margin + 36
+    badge_w = 110
+    badge_h = 32
+    draw.rounded_rectangle(
+        [(badge_x, badge_y), (badge_x + badge_w, badge_y + badge_h)],
+        radius=14,
+        fill="#3f3f46",
+    )
+    draw.text(
+        (badge_x + 18, badge_y + 7),
+        f"SLIDE {slide_index}",
+        fill="#ffffff",
+        font=font_badge,
+    )
+
+    # Neon-amber indicator pill if modified
+    if is_modified:
+        amber_x = badge_x + badge_w + 12
+        amber_w = 116
+        draw.rounded_rectangle(
+            [(amber_x, badge_y), (amber_x + amber_w, badge_y + badge_h)],
+            radius=14,
+            fill="#f59e0b",
+        )
+        draw.text(
+            (amber_x + 16, badge_y + 7),
+            "MODIFIED",
+            fill="#18181b",
+            font=font_badge,
+        )
+
+    # 4. Slide title if known or 'Slide X Overview' in bold clean text (#f4f4f5)
+    slide_title = (title or f"Slide {slide_index} Overview").strip()
+    if len(slide_title) > 60:
+        slide_title = slide_title[:57] + "..."
+    title_y = badge_y + badge_h + 24
+    draw.text(
+        (badge_x, title_y),
+        slide_title,
+        fill="#f4f4f5",
+        font=font_title,
+    )
+
+    # 5. Brief subtitle or shape count placeholder (#a1a1aa)
+    if subtitle:
+        sub_text = subtitle
+    elif shape_count is not None and shape_count > 0:
+        sub_text = f"{shape_count} shape{'s' if shape_count != 1 else ''} • 16:9 widescreen layout"
+    else:
+        sub_text = f"Shape count placeholder • 16:9 widescreen slide {slide_index}"
+
+    sub_y = title_y + 46
+    draw.text(
+        (badge_x, sub_y),
+        sub_text,
+        fill="#a1a1aa",
+        font=font_sub,
+    )
+
+    # Wireframe preview shape cards
+    content_top = sub_y + 44
+    content_bottom = height - card_margin - 36
+    content_width = width - (badge_x * 2)
+    col_gap = 24
+    col_w = (content_width - col_gap) // 2
+    col1_left = badge_x
+    col2_left = badge_x + col_w + col_gap
+
+    # Left card
+    draw.rounded_rectangle(
+        [(col1_left, content_top), (col1_left + col_w, content_bottom)],
+        radius=12,
+        fill="#1f1f23",
+        outline="#2e2e33",
+        width=1,
+    )
+    draw.rounded_rectangle(
+        [(col1_left + 24, content_top + 24), (col1_left + col_w - 24, content_top + 160)],
+        radius=8,
+        fill="#27272a",
+        outline="#f59e0b" if is_modified else "#3f3f46",
+        width=1,
+    )
+    draw.rounded_rectangle(
+        [(col1_left + 24, content_top + 180), (col1_left + 220, content_top + 194)],
+        radius=4,
+        fill="#3f3f46",
+    )
+    draw.rounded_rectangle(
+        [(col1_left + 24, content_top + 208), (col1_left + col_w - 40, content_top + 220)],
+        radius=4,
+        fill="#2e2e33",
+    )
+    draw.rounded_rectangle(
+        [(col1_left + 24, content_top + 232), (col1_left + col_w - 90, content_top + 244)],
+        radius=4,
+        fill="#2e2e33",
+    )
+
+    # Right card
+    draw.rounded_rectangle(
+        [(col2_left, content_top), (col2_left + col_w, content_bottom)],
+        radius=12,
+        fill="#1f1f23",
+        outline="#2e2e33",
+        width=1,
+    )
+    draw.rounded_rectangle(
+        [(col2_left + 24, content_top + 24), (col2_left + 160, content_top + 70)],
+        radius=6,
+        fill="#27272a",
+    )
+    draw.rounded_rectangle(
+        [(col2_left + 180, content_top + 24), (col2_left + 320, content_top + 70)],
+        radius=6,
+        fill="#27272a",
+    )
+    draw.rounded_rectangle(
+        [(col2_left + 24, content_top + 90), (col2_left + col_w - 24, content_bottom - 24)],
+        radius=8,
+        fill="#27272a",
+        outline="#3f3f46",
+        width=1,
+    )
+
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
 
 
 class BasePreviewRenderer(ABC):
@@ -67,30 +322,39 @@ class MockPreviewRenderer(BasePreviewRenderer):
         before_dir = workspace.before_previews_dir
         after_dir = workspace.after_previews_dir
 
+        titles, shape_counts = _extract_slide_titles_and_shapes(pptx_path)
+
         preview_items: list[SlidePreview] = []
         for i in range(1, slide_count + 1):
             base_filename = f"slide_{i:03d}.png"
+            png_bytes = generate_mock_slide_card(
+                slide_index=i,
+                title=titles.get(i),
+                shape_count=shape_counts.get(i),
+                is_modified=False,
+            )
+
             img_path = previews_dir / base_filename
-            img_path.write_bytes(MINIMAL_PNG_BYTES)
+            img_path.write_bytes(png_bytes)
 
             # Write dual Before and After previews
-            (before_dir / base_filename).write_bytes(MINIMAL_PNG_BYTES)
-            (before_dir / f"slide_{i}.png").write_bytes(MINIMAL_PNG_BYTES)
-            (before_dir / f"{i}.png").write_bytes(MINIMAL_PNG_BYTES)
-            (after_dir / base_filename).write_bytes(MINIMAL_PNG_BYTES)
-            (after_dir / f"slide_{i}.png").write_bytes(MINIMAL_PNG_BYTES)
-            (after_dir / f"{i}.png").write_bytes(MINIMAL_PNG_BYTES)
+            (before_dir / base_filename).write_bytes(png_bytes)
+            (before_dir / f"slide_{i}.png").write_bytes(png_bytes)
+            (before_dir / f"{i}.png").write_bytes(png_bytes)
+            (after_dir / base_filename).write_bytes(png_bytes)
+            (after_dir / f"slide_{i}.png").write_bytes(png_bytes)
+            (after_dir / f"{i}.png").write_bytes(png_bytes)
 
             if prefix:
                 prefixed_filename = f"slide_{i:03d}_{prefix}.png"
-                (previews_dir / prefixed_filename).write_bytes(MINIMAL_PNG_BYTES)
+                (previews_dir / prefixed_filename).write_bytes(png_bytes)
 
             preview_items.append(
                 SlidePreview(
                     slide_index=i,
                     image_path=f"previews/{base_filename}",
-                    width=1920,
-                    height=1080,
+                    width=1280,
+                    height=720,
                     format="png",
                 )
             )
@@ -117,22 +381,30 @@ class MockPreviewRenderer(BasePreviewRenderer):
         previews_dir.mkdir(parents=True, exist_ok=True)
         after_dir = workspace.after_previews_dir
 
+        titles, shape_counts = _extract_slide_titles_and_shapes(pptx_path)
+
         preview_items: list[SlidePreview] = []
         for i in range(1, slide_count + 1):
             base_filename = f"slide_{i:03d}.png"
             if not modified_indices or i in modified_indices:
+                png_bytes = generate_mock_slide_card(
+                    slide_index=i,
+                    title=titles.get(i),
+                    shape_count=shape_counts.get(i),
+                    is_modified=True,
+                )
                 img_path = previews_dir / base_filename
-                img_path.write_bytes(MINIMAL_PNG_BYTES)
-                (after_dir / base_filename).write_bytes(MINIMAL_PNG_BYTES)
-                (after_dir / f"slide_{i}.png").write_bytes(MINIMAL_PNG_BYTES)
-                (after_dir / f"{i}.png").write_bytes(MINIMAL_PNG_BYTES)
+                img_path.write_bytes(png_bytes)
+                (after_dir / base_filename).write_bytes(png_bytes)
+                (after_dir / f"slide_{i}.png").write_bytes(png_bytes)
+                (after_dir / f"{i}.png").write_bytes(png_bytes)
 
             preview_items.append(
                 SlidePreview(
                     slide_index=i,
                     image_path=f"previews/{base_filename}",
-                    width=1920,
-                    height=1080,
+                    width=1280,
+                    height=720,
                     format="png",
                 )
             )
