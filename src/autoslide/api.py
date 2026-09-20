@@ -13,6 +13,8 @@ from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadF
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
+from autoslide.agent.engine import AgentEngine
+from autoslide.agent.tools import ToolExecutionContext
 from autoslide.config import Settings
 from autoslide.conversation.clarification import ClarificationEngine
 from autoslide.conversation.models import (
@@ -23,6 +25,8 @@ from autoslide.conversation.models import (
 from autoslide.conversation.schemas import (
     ApproveDecisionRequest,
     ApproveDecisionResponse,
+    ChatSessionRequest,
+    ChatSessionResponse,
     CreateSessionResponse,
     ExecuteSessionResponse,
     SendMessageRequest,
@@ -63,6 +67,7 @@ def create_app(
     renderer: BasePreviewRenderer | None = None,
     session_store: SessionStore | None = None,
     conversation_service: ConversationService | None = None,
+    agent_engine: AgentEngine | None = None,
 ) -> FastAPI:
     """Create and wire the AutoSlide FastAPI application."""
     app_settings = settings or Settings.from_env()
@@ -78,6 +83,7 @@ def create_app(
         renderer=app_renderer,
     )
     app_session_store = session_store or SessionStore(base_dir=app_settings.data_root)
+    app_agent_engine = agent_engine or AgentEngine()
 
     def _provide_deck_inventory(job_id: str | None) -> DeckInventory | None:
         if not job_id:
@@ -485,6 +491,112 @@ def create_app(
         )
 
         return response
+
+    @app.post("/api/v1/sessions/{session_id}/chat", response_model=ChatSessionResponse)
+    def chat_session_agent(
+        session_id: str,
+        payload: ChatSessionRequest,
+    ) -> ChatSessionResponse:
+        try:
+            session = app_session_store.get(session_id)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
+
+        clean_message = payload.message.strip()
+        if not clean_message:
+            raise HTTPException(status_code=400, detail="Message cannot be empty")
+
+        # Locate working PPTX in job workspace
+        working_pptx: Path | None = None
+        workspace: JobWorkspace | None = None
+        if session.job_id:
+            job_dir = app_settings.data_root / "jobs" / session.job_id
+            working_candidate = job_dir / "working" / "presentation.pptx"
+            if working_candidate.exists():
+                working_pptx = working_candidate
+            else:
+                input_candidates = list((job_dir / "input").glob("*.pptx"))
+                if input_candidates:
+                    working_dir = job_dir / "working"
+                    working_dir.mkdir(parents=True, exist_ok=True)
+                    working_pptx = working_dir / "presentation.pptx"
+                    if not working_pptx.exists():
+                        import shutil
+                        shutil.copy2(input_candidates[0], working_pptx)
+            workspace = JobWorkspace(root=job_dir, job_id=session.job_id)
+
+        tool_context = ToolExecutionContext(
+            session_id=session_id,
+            job_id=session.job_id,
+            workspace=workspace,
+            working_pptx_path=working_pptx,
+            inventory=_provide_deck_inventory(session.job_id),
+        )
+
+        user_turn = ChatTurn(
+            id=f"turn_{uuid.uuid4().hex[:8]}",
+            role="user",
+            content=clean_message,
+        )
+        updated_session = session.with_turn(user_turn)
+
+        turn_resp = app_agent_engine.process_message(
+            session=updated_session,
+            message=clean_message,
+            context=tool_context,
+        )
+
+        tool_call_dicts = [
+            {
+                "tool_name": tc.tool_name,
+                "arguments": tc.arguments,
+                "result": tc.result,
+                "modified_slide_indices": tc.modified_slide_indices,
+                "success": tc.success,
+                "error": tc.error,
+            }
+            for tc in turn_resp.tool_calls
+        ]
+
+        assistant_turn = ChatTurn(
+            id=f"turn_{uuid.uuid4().hex[:8]}",
+            role="assistant",
+            content=turn_resp.assistant_message,
+            card={
+                "tool_calls": tool_call_dicts,
+                "modified_slide_indices": turn_resp.modified_slide_indices,
+            } if tool_call_dicts else None,
+        )
+        final_session = updated_session.with_turn(assistant_turn)
+        if turn_resp.modified_slide_indices:
+            try:
+                final_session = final_session.transition(ConversationState.READY_FOR_EXECUTION)
+            except Exception:
+                pass
+
+        saved_session = app_session_store.save(final_session)
+
+        app_event_log.append(
+            session_id,
+            "AGENT_CHAT_PROCESSED",
+            {
+                "session_id": session_id,
+                "user_message": clean_message,
+                "assistant_message": turn_resp.assistant_message,
+                "tool_calls_count": len(turn_resp.tool_calls),
+                "modified_slide_indices": turn_resp.modified_slide_indices,
+                "state": saved_session.state.value,
+            },
+        )
+
+        return ChatSessionResponse(
+            session_id=saved_session.session_id,
+            assistant_message=turn_resp.assistant_message,
+            tool_calls=tool_call_dicts,
+            modified_slide_indices=turn_resp.modified_slide_indices,
+            state=saved_session.state,
+            turns=[t.model_dump() for t in saved_session.turns],
+        )
 
     @app.get("/api/v1/sessions/{session_id}", response_model=SessionDetailResponse)
     def get_session_detail(session_id: str) -> SessionDetailResponse:

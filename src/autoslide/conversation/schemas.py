@@ -80,3 +80,24 @@ class SessionEventsResponse(BaseModel):
 
     session_id: str
     events: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class ChatSessionRequest(BaseModel):
+    """Payload for submitting a chat message to the Real Agent Engine."""
+
+    message: str
+    selection_context: SelectionContext | None = None
+
+
+class ChatSessionResponse(BaseModel):
+    """Response returned from Real Agent Engine chat execution."""
+
+    model_config = ConfigDict(frozen=True)
+
+    session_id: str
+    assistant_message: str
+    tool_calls: list[dict[str, Any]] = Field(default_factory=list)
+    modified_slide_indices: list[int] = Field(default_factory=list)
+    state: ConversationState
+    turns: list[dict[str, Any]] = Field(default_factory=list)
+

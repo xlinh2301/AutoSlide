@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 import urllib.parse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from autoslide.planner.models import TargetReference
+if TYPE_CHECKING:
+    from autoslide.planner.models import TargetReference
 
 
 class ContentOrigin(BaseModel):
@@ -78,7 +79,7 @@ class ProvenanceRecord(BaseModel):
 
     content_ref: str
     origin: ContentOrigin
-    destination: TargetReference
+    destination: Any
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 

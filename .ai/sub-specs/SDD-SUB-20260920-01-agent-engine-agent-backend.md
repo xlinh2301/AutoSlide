@@ -2,7 +2,7 @@
 id: SDD-SUB-20260920-01
 title: Real Local Agent Engine, Toolset Dispatcher & Chat Endpoint
 author: agent-backend
-status: APPROVED # DRAFT | REVIEW | APPROVED | MERGED
+status: COMPLETED # DRAFT | REVIEW | APPROVED | MERGED | COMPLETED
 main_spec: "[[.ai/specs/ADS-003/requirements.md]]"
 summary: "Implement Real Local Agent Engine with multi-turn conversation, intelligent tool calling loop, 7 core slide manipulation/analysis tools, and wire to POST /api/v1/sessions/{session_id}/chat."
 decisions: 
@@ -27,7 +27,7 @@ risk_level: LOW
 > [!ABSTRACT] Tóm tắt cho AI
 > **Mục tiêu**: Thay thế cơ chế mock/heuristic clarification bằng Real Local Agent Engine có năng lực suy luận tự nhiên, hiểu ngữ cảnh và tự động kích hoạt bộ 7 Tools chỉnh sửa/phân tích slide; đồng thời tích hợp endpoint `POST /api/v1/sessions/{session_id}/chat`.
 > **Quyết định then chốt**: Xây dựng `AgentEngine` và `ToolRegistry` theo chuẩn Tool Calling; tích hợp với OOXML `DeckMutator` an toàn; lưu vết `ChatTurn` và `tool_calls` trong `ConversationSession`.
-> **Rủi ro**: #risk/LOW | **Trạng thái**: #status/DRAFT
+> **Rủi ro**: #risk/LOW | **Trạng thái**: #status/COMPLETED
 
 ---
 
