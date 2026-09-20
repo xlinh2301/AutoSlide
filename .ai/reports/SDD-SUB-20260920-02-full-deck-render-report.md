@@ -89,4 +89,4 @@ Key capabilities delivered:
 ## 5. Git Commit Trace
 
 - `93a5706`: `docs(spec): draft Sub-Spec SDD-SUB-20260920-02 for Task 2`
-- `[Pending]`: `feat(render): implement full-deck preview and dual-column delta render`
+- `17b9403`: `feat(render): implement full-deck preview and dual-column delta render`
