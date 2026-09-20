@@ -59,12 +59,15 @@ def _get_font(size: int, bold: bool = False) -> ImageFont.ImageFont:
         return ImageFont.load_default()
 
 
-def _extract_slide_titles_and_shapes(pptx_path: Path) -> tuple[dict[int, str], dict[int, int]]:
-    """Safely extract slide titles and shape counts from PPTX if available."""
+def _extract_slide_titles_and_shapes(
+    pptx_path: Path,
+) -> tuple[dict[int, str], dict[int, int], dict[int, list[str]]]:
+    """Safely extract slide titles, shape counts, and content body items from PPTX if available."""
     titles: dict[int, str] = {}
     shape_counts: dict[int, int] = {}
+    slide_texts: dict[int, list[str]] = {}
     if not pptx_path.exists() or not zipfile.is_zipfile(pptx_path):
-        return titles, shape_counts
+        return titles, shape_counts, slide_texts
     try:
         with zipfile.ZipFile(pptx_path) as zf:
             slide_entries = [
@@ -80,6 +83,18 @@ def _extract_slide_titles_and_shapes(pptx_path: Path) -> tuple[dict[int, str], d
                     root = ET.fromstring(xml_content)
                     shapes = root.findall(".//{http://schemas.openxmlformats.org/presentationml/2006/main}sp")
                     shape_counts[idx] = len(shapes)
+
+                    # Extract all non-empty paragraphs
+                    all_paragraphs: list[str] = []
+                    for p in root.findall(".//{http://schemas.openxmlformats.org/drawingml/2006/main}p"):
+                        t_nodes = p.findall(".//{http://schemas.openxmlformats.org/drawingml/2006/main}t")
+                        p_txt = "".join(t.text for t in t_nodes if t.text).strip()
+                        if p_txt:
+                            all_paragraphs.append(p_txt)
+
+                    # Filter out pure page numbers (e.g. '01', '02', '1')
+                    meaningful = [t for t in all_paragraphs if not (t.isdigit() and len(t) <= 3)]
+
                     title_text = ""
                     for sp in shapes:
                         ph = sp.find(".//{http://schemas.openxmlformats.org/presentationml/2006/main}ph")
@@ -89,26 +104,30 @@ def _extract_slide_titles_and_shapes(pptx_path: Path) -> tuple[dict[int, str], d
                                 for t in sp.findall(".//{http://schemas.openxmlformats.org/drawingml/2006/main}t")
                                 if t.text
                             ]
-                            if texts:
-                                title_text = " ".join(texts).strip()
+                            cand = " ".join(texts).strip()
+                            if cand and not (cand.isdigit() and len(cand) <= 3):
+                                title_text = cand
                                 break
+
+                    if not title_text and meaningful:
+                        title_text = meaningful[0][:65]
+
                     if not title_text:
-                        first_texts = [
-                            t.text
-                            for t in root.findall(".//{http://schemas.openxmlformats.org/drawingml/2006/main}t")
-                            if t.text
-                        ]
-                        if first_texts:
-                            candidate = " ".join(first_texts[:3]).strip()
-                            if candidate:
-                                title_text = candidate[:40]
-                    if title_text:
-                        titles[idx] = title_text
+                        title_text = f"Slide {idx}"
+
+                    titles[idx] = title_text
+
+                    # Body items are all remaining paragraphs after title
+                    body: list[str] = []
+                    for t in meaningful:
+                        if t != title_text and t not in body:
+                            body.append(t)
+                    slide_texts[idx] = body
                 except Exception:
                     continue
     except Exception:
         pass
-    return titles, shape_counts
+    return titles, shape_counts, slide_texts
 
 
 def generate_mock_slide_card(
@@ -117,25 +136,32 @@ def generate_mock_slide_card(
     subtitle: str | None = None,
     shape_count: int | None = None,
     is_modified: bool = False,
+    body_items: list[str] | None = None,
+    theme: str = "light",
     width: int = 1280,
     height: int = 720,
 ) -> bytes:
-    """Generate a rich 16:9 slide card preview image using PIL.Image and PIL.ImageDraw."""
-    # 1. 1280x720 RGB image with dark background (#18181b)
-    img = Image.new("RGB", (width, height), color="#18181b")
+    """Generate a rich 16:9 slide card preview image with real content in Canva Presentation style."""
+    is_dark = (theme == "dark")
+    bg_color = "#18181b" if is_dark else "#ffffff"
+    border_outline = "#f59e0b" if is_modified else ("#27272a" if is_dark else "#e2e8f0")
+    border_width = 3 if is_modified else 2
+
+    img = Image.new("RGB", (width, height), color=bg_color)
     draw = ImageDraw.Draw(img)
 
-    font_badge = _get_font(15, bold=True)
-    font_title = _get_font(34, bold=True)
-    font_sub = _get_font(18, bold=False)
+    font_badge = _get_font(14, bold=True)
+    font_title = _get_font(30, bold=True)
+    font_sub = _get_font(16, bold=False)
+    font_card_head = _get_font(18, bold=True)
+    font_body = _get_font(16, bold=False)
+    font_footer = _get_font(13, bold=False)
 
-    # 2. Subtle rounded rectangle border (#27272a)
-    card_margin = 28
-    border_outline = "#f59e0b" if is_modified else "#27272a"
-    border_width = 3 if is_modified else 2
+    # 1. Slide canvas border
+    card_margin = 24
     draw.rounded_rectangle(
         [(card_margin, card_margin), (width - card_margin, height - card_margin)],
-        radius=16,
+        radius=14,
         outline=border_outline,
         width=border_width,
     )
@@ -144,139 +170,202 @@ def generate_mock_slide_card(
     if is_modified:
         draw.rounded_rectangle(
             [
-                (card_margin + 4, card_margin + 4),
-                (width - card_margin - 4, card_margin + 12),
+                (card_margin + 6, card_margin + 4),
+                (width - card_margin - 6, card_margin + 12),
             ],
             radius=4,
             fill="#f59e0b",
         )
 
-    # 3. Slide badge pill: 'SLIDE X' (#3f3f46 background, #ffffff text)
-    badge_x = card_margin + 36
-    badge_y = card_margin + 36
-    badge_w = 110
-    badge_h = 32
+    # 2. Slide badge pill: 'SLIDE X'
+    badge_x = card_margin + 32
+    badge_y = card_margin + 24
+    badge_w = 100
+    badge_h = 30
+    badge_bg = "#27272a" if is_dark else "#f1f5f9"
+    badge_fg = "#ffffff" if is_dark else "#475569"
     draw.rounded_rectangle(
         [(badge_x, badge_y), (badge_x + badge_w, badge_y + badge_h)],
-        radius=14,
-        fill="#3f3f46",
+        radius=12,
+        fill=badge_bg,
+        outline="#3f3f46" if is_dark else "#cbd5e1",
+        width=1,
     )
     draw.text(
-        (badge_x + 18, badge_y + 7),
+        (badge_x + 16, badge_y + 6),
         f"SLIDE {slide_index}",
-        fill="#ffffff",
+        fill=badge_fg,
         font=font_badge,
     )
 
-    # Neon-amber indicator pill if modified
+    # Modified pill if modified
     if is_modified:
         amber_x = badge_x + badge_w + 12
-        amber_w = 116
+        amber_w = 110
         draw.rounded_rectangle(
             [(amber_x, badge_y), (amber_x + amber_w, badge_y + badge_h)],
-            radius=14,
+            radius=12,
             fill="#f59e0b",
         )
         draw.text(
-            (amber_x + 16, badge_y + 7),
+            (amber_x + 16, badge_y + 6),
             "MODIFIED",
             fill="#18181b",
             font=font_badge,
         )
 
-    # 4. Slide title if known or 'Slide X Overview' in bold clean text (#f4f4f5)
+    # 3. Slide Title
     slide_title = (title or f"Slide {slide_index} Overview").strip()
-    if len(slide_title) > 60:
-        slide_title = slide_title[:57] + "..."
-    title_y = badge_y + badge_h + 24
+    if len(slide_title) > 65:
+        slide_title = slide_title[:62] + "..."
+    title_y = badge_y + badge_h + 16
+    title_color = "#f4f4f5" if is_dark else "#0f172a"
     draw.text(
         (badge_x, title_y),
         slide_title,
-        fill="#f4f4f5",
+        fill=title_color,
         font=font_title,
     )
 
-    # 5. Brief subtitle or shape count placeholder (#a1a1aa)
+    # 4. Subtitle / Metadata
+    sub_y = title_y + 40
     if subtitle:
         sub_text = subtitle
     elif shape_count is not None and shape_count > 0:
-        sub_text = f"{shape_count} shape{'s' if shape_count != 1 else ''} • 16:9 widescreen layout"
+        sub_text = f"{shape_count} shape{'s' if shape_count != 1 else ''} • 16:9 Canva Presentation"
     else:
-        sub_text = f"Shape count placeholder • 16:9 widescreen slide {slide_index}"
-
-    sub_y = title_y + 46
+        sub_text = f"16:9 Canva Presentation • Slide {slide_index}"
+    sub_color = "#a1a1aa" if is_dark else "#64748b"
     draw.text(
         (badge_x, sub_y),
         sub_text,
-        fill="#a1a1aa",
+        fill=sub_color,
         font=font_sub,
     )
 
-    # Wireframe preview shape cards
-    content_top = sub_y + 44
+    # 5. Divider
+    div_y = sub_y + 30
+    draw.line(
+        [(badge_x, div_y), (width - card_margin - 32, div_y)],
+        fill="#27272a" if is_dark else "#e2e8f0",
+        width=1,
+    )
+
+    # 6. Body Content Cards (Canva Presentation Layout)
+    content_top = div_y + 18
     content_bottom = height - card_margin - 36
-    content_width = width - (badge_x * 2)
-    col_gap = 24
-    col_w = (content_width - col_gap) // 2
-    col1_left = badge_x
-    col2_left = badge_x + col_w + col_gap
+    content_w = (width - card_margin - 32) - badge_x
 
-    # Left card
-    draw.rounded_rectangle(
-        [(col1_left, content_top), (col1_left + col_w, content_bottom)],
-        radius=12,
-        fill="#1f1f23",
-        outline="#2e2e33",
-        width=1,
-    )
-    draw.rounded_rectangle(
-        [(col1_left + 24, content_top + 24), (col1_left + col_w - 24, content_top + 160)],
-        radius=8,
-        fill="#27272a",
-        outline="#f59e0b" if is_modified else "#3f3f46",
-        width=1,
-    )
-    draw.rounded_rectangle(
-        [(col1_left + 24, content_top + 180), (col1_left + 220, content_top + 194)],
-        radius=4,
-        fill="#3f3f46",
-    )
-    draw.rounded_rectangle(
-        [(col1_left + 24, content_top + 208), (col1_left + col_w - 40, content_top + 220)],
-        radius=4,
-        fill="#2e2e33",
-    )
-    draw.rounded_rectangle(
-        [(col1_left + 24, content_top + 232), (col1_left + col_w - 90, content_top + 244)],
-        radius=4,
-        fill="#2e2e33",
-    )
+    items = [it.strip() for it in (body_items or []) if it.strip()]
 
-    # Right card
-    draw.rounded_rectangle(
-        [(col2_left, content_top), (col2_left + col_w, content_bottom)],
-        radius=12,
-        fill="#1f1f23",
-        outline="#2e2e33",
-        width=1,
-    )
-    draw.rounded_rectangle(
-        [(col2_left + 24, content_top + 24), (col2_left + 160, content_top + 70)],
-        radius=6,
-        fill="#27272a",
-    )
-    draw.rounded_rectangle(
-        [(col2_left + 180, content_top + 24), (col2_left + 320, content_top + 70)],
-        radius=6,
-        fill="#27272a",
-    )
-    draw.rounded_rectangle(
-        [(col2_left + 24, content_top + 90), (col2_left + col_w - 24, content_bottom - 24)],
-        radius=8,
-        fill="#27272a",
-        outline="#3f3f46",
-        width=1,
-    )
+    card_bg = "#1f1f23" if is_dark else "#f8fafc"
+    card_border = "#2e2e33" if is_dark else "#e2e8f0"
+    card_head_color = "#f4f4f5" if is_dark else "#0f172a"
+    text_color = "#d4d4d8" if is_dark else "#334155"
+
+    def _render_text_block(x: int, y: int, max_w: int, text_lines: list[str], accent_color: str):
+        # Draw top accent bar on card
+        draw.rounded_rectangle([(x + 20, y), (x + 80, y + 4)], radius=2, fill=accent_color)
+        cur_y = y + 22
+        for line in text_lines:
+            if cur_y > content_bottom - 35:
+                break
+            is_header = len(line) < 30 and not line.endswith((".", ",", ";")) and not line.startswith("•")
+            if is_header:
+                cur_y += 4
+                draw.text((x + 20, cur_y), line.upper(), fill=card_head_color, font=font_card_head)
+                cur_y += 30
+            else:
+                clean_line = line.lstrip("•-* ").strip()
+                words = clean_line.split()
+                wrapped = []
+                cur_line: list[str] = []
+                for w in words:
+                    cur_line.append(w)
+                    if len(" ".join(cur_line)) > 42:
+                        wrapped.append(" ".join(cur_line[:-1]))
+                        cur_line = [w]
+                if cur_line:
+                    wrapped.append(" ".join(cur_line))
+
+                for l_idx, wl in enumerate(wrapped[:5]):
+                    prefix = "•  " if l_idx == 0 else "   "
+                    draw.text((x + 24, cur_y), f"{prefix}{wl}", fill=text_color, font=font_body)
+                    cur_y += 24
+                cur_y += 8
+
+    if not items:
+        # Default structured cards when slide has no body text
+        col_gap = 20
+        col_w = (content_w - col_gap) // 2
+        col1_left = badge_x
+        col2_left = badge_x + col_w + col_gap
+        draw.rounded_rectangle(
+            [(col1_left, content_top), (col1_left + col_w, content_bottom)],
+            radius=12,
+            fill=card_bg,
+            outline=card_border,
+            width=1,
+        )
+        _render_text_block(col1_left, content_top, col_w, [
+            "Overview & Key Points",
+            "Extracted presentation content and structured visual hierarchy.",
+            "Professional Canva presentation design with optimized contrast.",
+        ], "#3b82f6")
+        draw.rounded_rectangle(
+            [(col2_left, content_top), (col2_left + col_w, content_bottom)],
+            radius=12,
+            fill=card_bg,
+            outline=card_border,
+            width=1,
+        )
+        _render_text_block(col2_left, content_top, col_w, [
+            "Presentation Notes",
+            "16:9 widescreen layout with high-definition typography.",
+            "AI transformation ready for targeted slide edits and polishing.",
+        ], "#10b981")
+    elif len(items) <= 2:
+        # Single wide card
+        draw.rounded_rectangle(
+            [(badge_x, content_top), (badge_x + content_w, content_bottom)],
+            radius=12,
+            fill=card_bg,
+            outline=card_border,
+            width=1,
+        )
+        _render_text_block(badge_x, content_top, content_w, items, "#3b82f6")
+    else:
+        # Two balanced columns
+        col_gap = 20
+        col_w = (content_w - col_gap) // 2
+        col1_left = badge_x
+        col2_left = badge_x + col_w + col_gap
+        mid = (len(items) + 1) // 2
+        items_c1 = items[:mid]
+        items_c2 = items[mid:]
+
+        draw.rounded_rectangle(
+            [(col1_left, content_top), (col1_left + col_w, content_bottom)],
+            radius=12,
+            fill=card_bg,
+            outline=card_border,
+            width=1,
+        )
+        _render_text_block(col1_left, content_top, col_w, items_c1, "#3b82f6")
+
+        draw.rounded_rectangle(
+            [(col2_left, content_top), (col2_left + col_w, content_bottom)],
+            radius=12,
+            fill=card_bg,
+            outline=card_border,
+            width=1,
+        )
+        _render_text_block(col2_left, content_top, col_w, items_c2, "#10b981")
+
+    # 7. Footer
+    footer_y = height - card_margin - 20
+    draw.text((badge_x, footer_y), "AutoSlide Studio • Canva Edition", fill="#94a3b8", font=font_footer)
+    draw.text((width - card_margin - 120, footer_y), f"Slide {slide_index}", fill="#94a3b8", font=font_footer)
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")
@@ -322,7 +411,7 @@ class MockPreviewRenderer(BasePreviewRenderer):
         before_dir = workspace.before_previews_dir
         after_dir = workspace.after_previews_dir
 
-        titles, shape_counts = _extract_slide_titles_and_shapes(pptx_path)
+        titles, shape_counts, slide_texts = _extract_slide_titles_and_shapes(pptx_path)
 
         preview_items: list[SlidePreview] = []
         for i in range(1, slide_count + 1):
@@ -332,6 +421,7 @@ class MockPreviewRenderer(BasePreviewRenderer):
                 title=titles.get(i),
                 shape_count=shape_counts.get(i),
                 is_modified=False,
+                body_items=slide_texts.get(i, []),
             )
 
             img_path = previews_dir / base_filename
@@ -381,7 +471,7 @@ class MockPreviewRenderer(BasePreviewRenderer):
         previews_dir.mkdir(parents=True, exist_ok=True)
         after_dir = workspace.after_previews_dir
 
-        titles, shape_counts = _extract_slide_titles_and_shapes(pptx_path)
+        titles, shape_counts, slide_texts = _extract_slide_titles_and_shapes(pptx_path)
 
         preview_items: list[SlidePreview] = []
         for i in range(1, slide_count + 1):
@@ -392,6 +482,7 @@ class MockPreviewRenderer(BasePreviewRenderer):
                     title=titles.get(i),
                     shape_count=shape_counts.get(i),
                     is_modified=True,
+                    body_items=slide_texts.get(i, []),
                 )
                 img_path = previews_dir / base_filename
                 img_path.write_bytes(png_bytes)
