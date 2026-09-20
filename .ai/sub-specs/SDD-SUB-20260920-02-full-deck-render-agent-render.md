@@ -2,7 +2,7 @@
 id: SDD-SUB-20260920-02
 title: Full-Deck Ingest & Dual-Column Live Render Engine
 author: agent-render
-status: APPROVED # DRAFT | REVIEW | APPROVED | MERGED | COMPLETED
+status: COMPLETED # DRAFT | REVIEW | APPROVED | MERGED | COMPLETED
 main_spec: "[[.ai/specs/ADS-003/requirements.md]]"
 summary: "Implement full-deck slide ingestion with 100% thumbnail preview extraction, dual-column Before/After state tracking, delta re-rendering for modified slides, and the GET /api/v1/sessions/{session_id}/deck API endpoint."
 decisions:
@@ -99,13 +99,13 @@ risk_level: MEDIUM
 
 ## 4. Tiêu chí Chấp nhận (Acceptance Criteria)
 
-- [ ] **AC-01 (Full-Deck Preview Extraction)**: Khi khởi tạo Session với file PPTX có $N$ slide ($N \ge 1$), hệ thống trích xuất và sinh đầy đủ $N$ file ảnh preview cho toàn bộ deck.
-- [ ] **AC-02 (Initial Parity)**: Trạng thái ban đầu của deck (`GET /api/v1/sessions/{session_id}/deck`) trả về `slide_count == N`, tất cả các slide đều có `modified == False`, `before_url` và `after_url` trỏ đến ảnh tương ứng hợp lệ.
-- [ ] **AC-03 (Delta Re-render on Edit)**: Khi gọi hàm re-render delta với danh sách slide bị sửa đổi (ví dụ slide 2), chỉ ảnh preview của slide 2 ở cột After được cập nhật; các slide khác giữ nguyên; `modified_slide_indices` chứa `[2]`.
-- [ ] **AC-04 (Structural Mutation Support)**: Khi thêm slide mới (`add_slide`) hoặc xóa slide (`delete_slide`), hệ thống cập nhật đúng `slide_count` mới và chỉ mục của các slide.
-- [ ] **AC-05 (Fast Fallback & Mock Compatibility)**: Trong môi trường unit test không có LibreOffice, `MockPreviewRenderer` sinh đầy đủ mock PNGs hợp lệ cho tất cả các slide và pass 100% tests.
-- [ ] **AC-06 (API Integration)**: Endpoint `GET /api/v1/sessions/{session_id}/deck` trả về HTTP 200 kèm payload `DeckStateResponse` chuẩn schema; trả về HTTP 404 khi session không tồn tại.
-- [ ] **AC-07 (Quality & Hygiene)**: Mã nguồn tuân thủ type annotations đầy đủ, không có lint error, và toàn bộ test suite trong `tests/render/test_full_deck_render.py` cùng các regression tests hiện có đều vượt qua 100%.
+- [x] **AC-01 (Full-Deck Preview Extraction)**: Khi khởi tạo Session với file PPTX có $N$ slide ($N \ge 1$), hệ thống trích xuất và sinh đầy đủ $N$ file ảnh preview cho toàn bộ deck.
+- [x] **AC-02 (Initial Parity)**: Trạng thái ban đầu của deck (`GET /api/v1/sessions/{session_id}/deck`) trả về `slide_count == N`, tất cả các slide đều có `modified == False`, `before_url` và `after_url` trỏ đến ảnh tương ứng hợp lệ.
+- [x] **AC-03 (Delta Re-render on Edit)**: Khi gọi hàm re-render delta với danh sách slide bị sửa đổi (ví dụ slide 2), chỉ ảnh preview của slide 2 ở cột After được cập nhật; các slide khác giữ nguyên; `modified_slide_indices` chứa `[2]`.
+- [x] **AC-04 (Structural Mutation Support)**: Khi thêm slide mới (`add_slide`) hoặc xóa slide (`delete_slide`), hệ thống cập nhật đúng `slide_count` mới và chỉ mục của các slide.
+- [x] **AC-05 (Fast Fallback & Mock Compatibility)**: Trong môi trường unit test không có LibreOffice, `MockPreviewRenderer` sinh đầy đủ mock PNGs hợp lệ cho tất cả các slide và pass 100% tests.
+- [x] **AC-06 (API Integration)**: Endpoint `GET /api/v1/sessions/{session_id}/deck` trả về HTTP 200 kèm payload `DeckStateResponse` chuẩn schema; trả về HTTP 404 khi session không tồn tại.
+- [x] **AC-07 (Quality & Hygiene)**: Mã nguồn tuân thủ type annotations đầy đủ, không có lint error, và toàn bộ test suite trong `tests/render/test_full_deck_render.py` cùng các regression tests hiện có đều vượt qua 100%.
 
 ---
 

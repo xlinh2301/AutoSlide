@@ -87,3 +87,25 @@ class PreviewManifest(BaseModel):
     previews: list[SlidePreview] = Field(default_factory=list)
     generated_at: str
     renderer: str
+
+
+class DeckSlideState(BaseModel):
+    """State for a single slide in dual-column Before/After representation."""
+
+    index: int
+    before_url: str | None = None
+    after_url: str | None = None
+    modified: bool = False
+    title: str | None = None
+
+
+class DeckStateResponse(BaseModel):
+    """Full-deck dual-column presentation state response."""
+
+    session_id: str
+    job_id: str | None = None
+    slide_count: int
+    slides: list[DeckSlideState] = Field(default_factory=list)
+    modified_slide_indices: list[int] = Field(default_factory=list)
+    last_modified_at: str | None = None
+

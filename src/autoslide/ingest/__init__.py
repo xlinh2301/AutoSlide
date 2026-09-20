@@ -11,6 +11,8 @@ from autoslide.ingest.fingerprint import compute_shape_fingerprint
 from autoslide.ingest.models import (
     BoundingBox,
     DeckInventory,
+    DeckSlideState,
+    DeckStateResponse,
     PreviewManifest,
     ShapeInventoryItem,
     SlideDimensions,
@@ -24,6 +26,7 @@ from autoslide.ingest.renderer import (
     BasePreviewRenderer,
     LibreOfficePreviewRenderer,
     MockPreviewRenderer,
+    build_deck_state_response,
     select_preview_renderer,
 )
 from autoslide.ingest.validator import validate_pptx_package
@@ -33,6 +36,8 @@ __all__ = [
     "BoundingBox",
     "CorruptPackageError",
     "DeckInventory",
+    "DeckSlideState",
+    "DeckStateResponse",
     "IngestError",
     "InvalidPackageError",
     "LibreOfficePreviewRenderer",
@@ -47,6 +52,7 @@ __all__ = [
     "SlidePreview",
     "TextRunInfo",
     "UnsupportedPackageError",
+    "build_deck_state_response",
     "compute_shape_fingerprint",
     "select_preview_renderer",
     "validate_pptx_package",

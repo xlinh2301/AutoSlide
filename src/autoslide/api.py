@@ -36,8 +36,12 @@ from autoslide.conversation.service import (
 )
 from autoslide.conversation.store import SessionStore
 from autoslide.events import EventLog, Redactor
-from autoslide.ingest.models import DeckInventory
-from autoslide.ingest.renderer import BasePreviewRenderer, select_preview_renderer
+from autoslide.ingest.models import DeckInventory, DeckStateResponse
+from autoslide.ingest.renderer import (
+    BasePreviewRenderer,
+    build_deck_state_response,
+    select_preview_renderer,
+)
 from autoslide.jobs.models import (
     EditScope,
     JobDecisionRequest,
@@ -429,6 +433,26 @@ def create_app(
         # Record initial ingestion checkpoint
         checkpoint = workspace.write_checkpoint("INITIAL", input_path)
 
+        # Copy to working directory
+        working_dir = workspace.root / "working"
+        working_dir.mkdir(parents=True, exist_ok=True)
+        working_path = working_dir / "presentation.pptx"
+        working_path.write_bytes(content)
+
+        # Trigger full-deck ingest & preview generation
+        try:
+            app_orchestrator.ingestor.ingest(
+                input_path,
+                workspace,
+                renderer=app_renderer,
+            )
+        except Exception as exc:
+            app_event_log.append(
+                job_record.job_id,
+                "INITIAL_INGEST_WARNING",
+                {"warning": str(exc)},
+            )
+
         session_id = f"session_{uuid.uuid4().hex[:12]}"
         session = ConversationSession.new(
             session_id=session_id,
@@ -708,5 +732,174 @@ def create_app(
             state=session.state,
             message="Plan execution started in background.",
         )
+
+    # -------------------------------------------------------------------------
+    # Full-Deck Ingest & Dual-Column Live Render Endpoints (ADS-003)
+    # -------------------------------------------------------------------------
+
+    @app.get("/api/v1/sessions/{session_id}/deck", response_model=DeckStateResponse)
+    def get_session_deck(session_id: str) -> DeckStateResponse:
+        try:
+            session = app_session_store.get(session_id)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
+
+        if not session.job_id:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No workspace associated with session '{session_id}'",
+            )
+
+        workspace = JobWorkspace(root=app_settings.data_root / "jobs" / session.job_id, job_id=session.job_id)
+
+        titles_map: dict[int, str] = {}
+        slide_count = None
+        try:
+            inv = _provide_deck_inventory(session.job_id)
+            if inv:
+                slide_count = inv.slide_count
+                for s in inv.slides:
+                    title_text = None
+                    for shp in s.shapes:
+                        if shp.placeholder_type in ("title", "ctrTitle") or "title" in shp.shape_name.lower():
+                            if shp.raw_text:
+                                title_text = shp.raw_text.strip()
+                                break
+                    if title_text:
+                        titles_map[s.slide_index] = title_text
+        except Exception:
+            pass
+
+        # If preview thumbnails have not been generated yet, try to ingest
+        if not list(workspace.before_previews_dir.glob("*.png")):
+            input_files = list((workspace.root / "input").glob("*.pptx"))
+            if input_files:
+                try:
+                    app_orchestrator.ingestor.ingest(input_files[0], workspace, renderer=app_renderer)
+                except Exception:
+                    pass
+
+        modified_indices: list[int] = []
+        deck_state_file = workspace.artifacts_dir / "deck_state.json"
+        if deck_state_file.exists():
+            try:
+                data = json.loads(deck_state_file.read_text(encoding="utf-8"))
+                modified_indices = data.get("modified_slide_indices", [])
+            except Exception:
+                pass
+
+        return build_deck_state_response(
+            workspace=workspace,
+            session_id=session_id,
+            job_id=session.job_id,
+            slide_count=slide_count,
+            modified_slide_indices=modified_indices,
+            titles=titles_map,
+        )
+
+    @app.get("/api/v1/sessions/{session_id}/preview/{stage}/{slide_name}")
+    @app.get("/api/v1/sessions/{session_id}/preview/{slide_name}")
+    def get_session_preview(
+        session_id: str,
+        slide_name: str,
+        stage: str = "after",
+    ) -> FileResponse:
+        try:
+            session = app_session_store.get(session_id)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
+
+        if not session.job_id:
+            raise HTTPException(status_code=404, detail="No workspace associated with session")
+
+        workspace_root = app_settings.data_root / "jobs" / session.job_id
+        name = slide_name
+        padded_name = slide_name
+        if not name.endswith(".png"):
+            if name.isdigit():
+                padded_name = f"slide_{int(name):03d}.png"
+                name = f"slide_{name}.png"
+            else:
+                name = f"{name}.png"
+                padded_name = name
+        elif name.endswith(".png"):
+            stem = name[:-4]
+            if stem.isdigit():
+                padded_name = f"slide_{int(stem):03d}.png"
+            elif stem.startswith("slide_") and stem[6:].isdigit():
+                padded_name = f"slide_{int(stem[6:]):03d}.png"
+
+        candidate_dirs = []
+        if stage in ("before", "after"):
+            candidate_dirs.append(workspace_root / "previews" / stage)
+        candidate_dirs.extend([
+            workspace_root / "previews" / "after",
+            workspace_root / "previews" / "before",
+            workspace_root / "previews",
+            workspace_root / "artifacts",
+        ])
+
+        for base_dir in candidate_dirs:
+            for cand_name in (padded_name, name, slide_name):
+                candidate = (base_dir / cand_name).resolve()
+                try:
+                    candidate.relative_to(workspace_root)
+                    if candidate.is_file():
+                        return FileResponse(candidate, media_type="image/png")
+                except ValueError:
+                    pass
+
+        raise HTTPException(status_code=404, detail=f"Preview image not found: {slide_name}")
+
+    @app.get("/api/v1/jobs/{job_id}/preview/{stage}/{slide_name}")
+    @app.get("/api/v1/jobs/{job_id}/preview/{slide_name}")
+    def get_job_preview(
+        job_id: str,
+        slide_name: str,
+        stage: str = "after",
+    ) -> FileResponse:
+        try:
+            app_registry.get(job_id)
+        except KeyError:
+            raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+
+        workspace_root = app_settings.data_root / "jobs" / job_id
+        name = slide_name
+        padded_name = slide_name
+        if not name.endswith(".png"):
+            if name.isdigit():
+                padded_name = f"slide_{int(name):03d}.png"
+                name = f"slide_{name}.png"
+            else:
+                name = f"{name}.png"
+                padded_name = name
+        elif name.endswith(".png"):
+            stem = name[:-4]
+            if stem.isdigit():
+                padded_name = f"slide_{int(stem):03d}.png"
+            elif stem.startswith("slide_") and stem[6:].isdigit():
+                padded_name = f"slide_{int(stem[6:]):03d}.png"
+
+        candidate_dirs = []
+        if stage in ("before", "after"):
+            candidate_dirs.append(workspace_root / "previews" / stage)
+        candidate_dirs.extend([
+            workspace_root / "previews" / "after",
+            workspace_root / "previews" / "before",
+            workspace_root / "previews",
+            workspace_root / "artifacts",
+        ])
+
+        for base_dir in candidate_dirs:
+            for cand_name in (padded_name, name, slide_name):
+                candidate = (base_dir / cand_name).resolve()
+                try:
+                    candidate.relative_to(workspace_root)
+                    if candidate.is_file():
+                        return FileResponse(candidate, media_type="image/png")
+                except ValueError:
+                    pass
+
+        raise HTTPException(status_code=404, detail=f"Preview image not found: {slide_name}")
 
     return app
