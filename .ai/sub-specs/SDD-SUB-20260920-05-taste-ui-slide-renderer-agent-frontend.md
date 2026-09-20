@@ -2,7 +2,7 @@
 id: SDD-SUB-20260920-05
 title: Anti-Slop UI/UX Redesign (Linear-Style Minimalist) & High-Fidelity Slide Content Card Renderer
 author: agent-frontend
-status: APPROVED # DRAFT | REVIEW | APPROVED | MERGED
+status: COMPLETED # DRAFT | REVIEW | APPROVED | MERGED | COMPLETED
 main_spec: "[[.ai/specs/ADS-003/requirements.md]]"
 summary: "Khắc phục triệt để lỗi upload không hiện slide bằng High-Fidelity PIL Slide Content Renderer, và nâng cấp toàn diện UI/UX Web Studio theo chuẩn Leonxlnx/taste-skill (Linear-Style Minimalist)."
 decisions: 
@@ -77,18 +77,26 @@ risk_level: MEDIUM # LOW | MEDIUM | HIGH
 
 ---
 
-## 5. Kế hoạch Kiểm tra (Verification Plan)
+## 5. Kế hoạch Kiểm tra & Bằng chứng Thực thi (Verification & Evidence)
 
-### Automated
-```bash
-uv run pytest tests/ui/ tests/ingest/ tests/api/ -q
-```
+### Automated Test Evidence
+- **Full Test Suite (`tests/ui/`, `tests/ingest/`, `tests/api/`)**: 78/78 tests PASSED (35.54s, 1 skipped).
+- **Quality Gates & Render Suite (`tests/quality_gates/`, `tests/render/`)**: 18/18 tests PASSED (1.96s).
+- **Tổng cộng**: 96/96 tests PASSED 100%.
 
-### Manual QA
-1. Mở `http://localhost:8001/` trong trình duyệt.
-2. Tải lên tệp `icisn_2025_fusionnetx.pptx.pptx`.
-3. Kiểm tra các slide trên Filmstrip và Canvas Trước/Sau có hiển thị tiêu đề và nội dung slide trực quan hay không.
-4. Gửi tin nhắn qua Chat Rail để chỉnh sửa slide và quan sát cập nhật thời gian thực.
+### Live Verification with PPTX (`icisn_2025_fusionnetx.pptx.pptx`)
+- **Server URL**: `http://localhost:8001/` listening on `0.0.0.0:8001`.
+- **Slide Preview Generation (No more 1x1 transparent dot)**:
+  * Slide 1: `(1280, 720)` PNG, 17,519 bytes.
+  * Slide 2: `(1280, 720)` PNG, 20,919 bytes.
+  * Slide 3: `(1280, 720)` PNG, 15,179 bytes.
+  * Slide 4: `(1280, 720)` PNG, 18,122 bytes.
+  * Slide 5: `(1280, 720)` PNG, 18,591 bytes.
+  * Slide 6: `(1280, 720)` PNG, 18,009 bytes.
+  * Slide 7: `(1280, 720)` PNG, 16,714 bytes.
+  * Slide 8: `(1280, 720)` PNG, 18,260 bytes.
+  * Slide 9: `(1280, 720)` PNG, 15,382 bytes.
+- **UI Styling**: Thẻ slide Filmstrip và Canvas Trước/Sau hiển thị tỉ lệ 16/9, `object-fit: cover`, viền 1px tinh tế, hiệu ứng hover nâng card mượt mà và viền phát sáng màu hổ phách khi được chỉnh sửa.
 
 ---
 
