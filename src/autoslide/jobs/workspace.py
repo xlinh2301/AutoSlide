@@ -98,6 +98,18 @@ class JobWorkspace:
         return self.root / "previews"
 
     @property
+    def before_previews_dir(self) -> Path:
+        p = self.root / "previews" / "before"
+        p.mkdir(parents=True, exist_ok=True)
+        return p
+
+    @property
+    def after_previews_dir(self) -> Path:
+        p = self.root / "previews" / "after"
+        p.mkdir(parents=True, exist_ok=True)
+        return p
+
+    @property
     def artifacts_dir(self) -> Path:
         return self.root / "artifacts"
 
@@ -109,3 +121,4 @@ class JobWorkspace:
     def last_checkpoint_id(self) -> str | None:
         """Return the ID of the most recent checkpoint written in this workspace."""
         return self._last_checkpoint_id
+
