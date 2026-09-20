@@ -2,7 +2,7 @@
 id: SDD-SUB-20260920-07
 title: Canva-Style Slide Content Rendering (Body Text, Bullets, White/Dark Themes) & Dynamic Chatbot Intelligence
 author: agent-frontend
-status: APPROVED # DRAFT | REVIEW | APPROVED | MERGED
+status: COMPLETED # DRAFT | REVIEW | APPROVED | MERGED
 main_spec: "[[.ai/specs/ADS-003/requirements.md]]"
 summary: "Áp dụng phong cách Canva Clone (nền trắng chuyên nghiệp / dark theme linh hoạt) vẽ toàn bộ nội dung text, gạch đầu dòng, chỉ số thực tế từ PPTX lên slide; đồng thời nâng cấp Chatbot phản hồi hội thoại thông minh, xóa bỏ câu lặp vô nghĩa."
 decisions: 
@@ -31,7 +31,7 @@ risk_level: MEDIUM # LOW | MEDIUM | HIGH
 > - Nâng cấp hàm bóc tách `_extract_slide_titles_and_shapes` thành `_extract_slide_content`: Bóc tách đầy đủ Tiêu đề (`title`), Danh sách nội dung (`bullet_points`), Phân đoạn (`paragraphs`), và Chỉ số (`metrics`).
 > - Nâng cấp `generate_mock_slide_card`: Vẽ trực tiếp các khối văn bản thực tế, chia 1 hoặc 2 cột thẻ bài phong cách Canva, font chữ rõ ràng, có ngắt dòng (word-wrap) tự động.
 > - Cải tạo `AgentEngine`: Kết nối bộ xử lý hội thoại tự nhiên theo ngữ cảnh bài thuyết trình hiện tại (session summary, slide count, slide text) thay vì hardcoded static string lặp lại.
-> **Rủi ro**: #risk/MEDIUM | **Trạng thái**: #status/DRAFT
+> **Rủi ro**: #risk/MEDIUM | **Trạng thái**: #status/COMPLETED
 
 ---
 
@@ -74,11 +74,11 @@ risk_level: MEDIUM # LOW | MEDIUM | HIGH
 
 ## 4. Tiêu chí Chấp nhận (Acceptance Criteria)
 
-- [ ] Slide preview hiển thị đầy đủ tiêu đề VÀ các dòng nội dung / gạch đầu dòng thực tế của file PowerPoint đã upload.
-- [ ] Giao diện slide có nền trắng thanh lịch chuẩn Canva Presentation, typography rõ nét, dễ đọc.
-- [ ] Người dùng chat "hi", "bạn là ai", hoặc "bạn làm được gì": Bot trả lời tự nhiên, đa dạng, không bị lặp lại 1 câu duy nhất.
-- [ ] Không gắn nhầm tag `🎯 Slide 1` cho các tin nhắn hội thoại chung.
-- [ ] Toàn bộ 96+ tests tự động chạy pass 100%.
+- [x] Slide preview hiển thị đầy đủ tiêu đề VÀ các dòng nội dung / gạch đầu dòng thực tế của file PowerPoint đã upload.
+- [x] Giao diện slide có nền trắng thanh lịch chuẩn Canva Presentation, typography rõ nét, dễ đọc.
+- [x] Người dùng chat "hi", "bạn là ai", hoặc "bạn làm được gì": Bot trả lời tự nhiên, đa dạng, không bị lặp lại 1 câu duy nhất.
+- [x] Không gắn nhầm tag `🎯 Slide 1` cho các tin nhắn hội thoại chung.
+- [x] Toàn bộ 248 tests tự động chạy pass 100%.
 
 ---
 
@@ -86,16 +86,18 @@ risk_level: MEDIUM # LOW | MEDIUM | HIGH
 
 ### Automated
 ```bash
-uv run pytest tests/ingest/ tests/agent/ tests/ui/ tests/api/ -q
+uv run pytest tests/ -q
+# Kết quả thực tế: 248 passed, 1 skipped, 2 warnings in 45.81s (100% pass)
 ```
 
 ### Manual QA
 1. Mở `http://localhost:8001/`.
-2. Tải lên file PowerPoint mẫu.
-3. Xác nhận trên slide hiển thị đầy đủ các dòng chữ/gạch đầu dòng thực tế (không phải các ô xám rỗng).
-4. Chat: "hi" $\rightarrow$ Kiểm tra câu trả lời tự nhiên.
-5. Chat: "bạn là ai" $\rightarrow$ Kiểm tra câu trả lời giới thiệu trợ lý AI AutoSlide mà không lặp lại câu trước.
-6. Chat: "slide 1 có gì" $\rightarrow$ Kiểm tra trả lời chi tiết nội dung slide 1.
+2. Tải lên file PowerPoint mẫu (`icisn_2025_fusionnetx.pptx.pptx`).
+3. Xác nhận trên slide hiển thị đầy đủ các dòng chữ/gạch đầu dòng thực tế (Slide 2: PROBLEM & SOLUTION; Slide 3: DLD DATASET & OVERVIEW).
+4. Chat: "hi" $\rightarrow$ Bot trả lời: "Xin chào! Tôi là AutoSlide Agent. Tôi đã nạp bài thuyết trình (9 slides) trên Canvas..."
+5. Chat: "bạn là ai" $\rightarrow$ Bot giới thiệu chi tiết trợ lý AutoSlide Canva Studio với các bullet points rõ ràng.
+6. Chat: "slide 1 có gì" $\rightarrow$ Bot phân tích chi tiết tiêu đề và nội dung slide 1.
+7. Chat: "bài này nói về gì" $\rightarrow$ Bot tóm lược tổng quan toàn bộ cấu trúc 9 slide trong bài thuyết trình.
 
 ---
 
