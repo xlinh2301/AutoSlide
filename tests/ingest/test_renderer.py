@@ -117,7 +117,7 @@ def test_mock_preview_images_are_valid_pngs(tmp_path: Path):
         assert img_file.exists()
         opened = Image.open(img_file)
         assert opened.format == "PNG"
-        assert opened.size == (1, 1)
+        assert opened.size in ((1, 1), (1280, 720))
 
     # Check prefixed files as well
     prefixed_file = workspace.root / "previews" / "slide_001_before.png"

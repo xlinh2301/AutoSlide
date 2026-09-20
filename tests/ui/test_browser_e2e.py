@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 import pytest
 import uvicorn
+pytest.importorskip("playwright.sync_api")
 from playwright.sync_api import sync_playwright
 
 from autoslide.api import create_app
