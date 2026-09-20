@@ -114,6 +114,7 @@ class AgentEngine:
             r"(?:slide|trang)\s*(\d+)\s+(?:nội dung|tóm tắt|chi tiết|thông tin|có gì|viết gì)",
             r"(?:what(?:'s| is) on|content of|summarize|details of)\s+(?:slide|page)\s*(\d+)?",
             r"(?:slide|page)\s*(\d+)\s+(?:content|summary|details)",
+            r"^(?:có gì|có những gì|nội dung là gì|nội dung gì|nói về gì|thông tin gì|tóm tắt|xem nội dung|chi tiết)$",
         ]
 
         # Check calculation / analysis intent
