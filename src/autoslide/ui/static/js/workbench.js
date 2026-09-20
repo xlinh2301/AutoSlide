@@ -596,7 +596,11 @@
       if (turn.context && turn.context.selected_text) {
         contextHtml = `<div class="user-context-pill">🎯 ${turn.context.selected_text}</div>`;
       } else if (turn.context && turn.context.slide_index) {
-        contextHtml = `<div class="user-context-pill">🎯 Slide ${turn.context.slide_index}</div>`;
+        const msg = (turn.content || "").toLowerCase().trim();
+        const isGeneralChat = ["hi", "hello", "chào", "bạn là ai", "who are you", "giúp", "help", "hướng dẫn"].some(g => msg.startsWith(g) || msg === g);
+        if (!isGeneralChat) {
+          contextHtml = `<div class="user-context-pill">🎯 Slide ${turn.context.slide_index}</div>`;
+        }
       }
 
       turnEl.innerHTML = `

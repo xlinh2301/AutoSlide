@@ -299,21 +299,90 @@ class AgentEngine:
                 assistant_reply = "\n\n".join(success_messages)
         else:
             # Natural conversational response for general queries / clarifications
-            msg_lower = message.lower()
-            if any(greeting in msg_lower for greeting in ["chào", "hello", "hi", "bạn là ai", "who are you"]):
+            msg_lower = message.lower().strip()
+            if any(q in msg_lower for q in ["bạn là ai", "who are you", "giới thiệu về bạn", "ai đây", "bạn tên gì"]):
                 assistant_reply = (
-                    "Xin chào! Tôi là AutoSlide Agent. Tôi có thể giúp bạn chỉnh sửa nội dung slide, "
-                    "thêm/xóa/đổi vị trí trang, cập nhật màu sắc giao diện, phân tích số liệu hoặc tìm kiếm thông tin cho bài thuyết trình."
+                    "Tôi là **AutoSlide AI Assistant** — trợ lý thiết kế và biên tập bài thuyết trình PowerPoint chuẩn phong cách Canva Studio.\n\n"
+                    "Tôi có thể hỗ trợ bạn:\n"
+                    "• 🔍 **Đọc hiểu & Phân tích**: Trích xuất chi tiết tiêu đề, số liệu và gạch đầu dòng từng slide\n"
+                    "• ✍️ **Chỉnh sửa nội dung**: Đổi tiêu đề, thay đổi câu chữ và bổ sung luận điểm\n"
+                    "• 📑 **Quản lý cấu trúc**: Thêm trang mới, xóa trang hoặc sắp xếp lại thứ tự bài trình bày\n"
+                    "• 🎨 **Giao diện Canva**: Cập nhật màu sắc, theme thanh lịch nền sáng hoặc tối\n"
+                    "• 🌐 **Nghiên cứu dẫn chứng**: Tìm kiếm dữ liệu và trích dẫn mới nhất từ web."
                 )
-            elif "giúp" in msg_lower or "hướng dẫn" in msg_lower or "help" in msg_lower:
+            elif any(greeting in msg_lower for greeting in ["chào", "hello", "hi", "hey", "alo"]):
+                slide_count = None
+                if context and context.working_pptx_path and context.working_pptx_path.exists():
+                    try:
+                        from autoslide.ingest.renderer import _extract_slide_titles_and_shapes
+                        t, _, _ = _extract_slide_titles_and_shapes(context.working_pptx_path)
+                        if t:
+                            slide_count = len(t)
+                    except Exception:
+                        pass
+
+                if slide_count:
+                    assistant_reply = (
+                        f"Xin chào! Tôi là AutoSlide Agent. Tôi đã nạp bài thuyết trình ({slide_count} slides) trên Canvas. "
+                        "Bạn muốn tôi điều chỉnh slide nào, đổi theme giao diện Canva, hay cần phân tích chi tiết nội dung trang nào?"
+                    )
+                else:
+                    assistant_reply = (
+                        "Xin chào! Tôi là AutoSlide Agent. Hãy tải lên tệp PowerPoint (.pptx) "
+                        "để xem trước slide chuẩn Canva và cùng tôi tối ưu hóa bài thuyết trình nhé!"
+                    )
+            elif any(h in msg_lower for h in ["giúp", "hướng dẫn", "help", "làm được gì"]):
                 assistant_reply = (
-                    "Bạn có thể yêu cầu tôi thực hiện các tác vụ như: 'Sửa tiêu đề slide 1 thành Báo cáo Q3', "
-                    "'Thêm slide kết luận', 'Xóa slide 2', 'Đổi theme slide 1 thành modern_dark', hoặc 'Tính tổng các số liệu trên slide'."
+                    "Dưới đây là một số ví dụ thao tác bạn có thể thử ngay:\n"
+                    "• *'Slide 1 có gì?'* — Tra cứu toàn bộ nội dung và gạch đầu dòng trên Slide 1\n"
+                    "• *'Sửa tiêu đề slide 1 thành Báo cáo Tổng kết'* — Chỉnh sửa tiêu đề tức thì\n"
+                    "• *'Thêm slide mới với tiêu đề Kế hoạch Hành động'* — Tạo thêm slide mới\n"
+                    "• *'Xóa slide 2'* — Loại bỏ slide không cần thiết\n"
+                    "• *'Đổi vị trí slide 3 sang 1'* — Sắp xếp lại thứ tự trình bày\n"
+                    "• *'Đổi theme slide 1 sang canva_clean'* — Cập nhật phong cách giao diện"
                 )
+            elif any(k in msg_lower for k in ["nói về gì", "chủ đề", "tóm tắt cả bài", "tổng quan bài", "overview"]):
+                if context.working_pptx_path and context.working_pptx_path.exists():
+                    try:
+                        from autoslide.ingest.renderer import _extract_slide_titles_and_shapes
+                        t, _, _ = _extract_slide_titles_and_shapes(context.working_pptx_path)
+                        if t:
+                            summary_lines = [f"• Slide {k}: **{v}**" for k, v in sorted(t.items())[:8]]
+                            assistant_reply = (
+                                f"Bài thuyết trình gồm {len(t)} slide với cấu trúc các phần:\n" +
+                                "\n".join(summary_lines) +
+                                ("\n..." if len(t) > 8 else "") +
+                                "\n\nBạn muốn tôi tập trung chỉnh sửa hoặc phân tích sâu slide nào?"
+                            )
+                        else:
+                            assistant_reply = "Bài thuyết trình hiện chưa có nội dung văn bản cụ thể. Bạn có thể thêm nội dung mới cho từng trang."
+                    except Exception:
+                        assistant_reply = "Tôi có thể hỗ trợ bạn xem lại bài thuyết trình. Hãy cho tôi biết slide bạn muốn xem."
+                else:
+                    assistant_reply = "Chưa có bài thuyết trình nào được nạp. Hãy tải lên file .pptx để tôi phân tích nhé!"
             else:
-                assistant_reply = (
-                    f"Tôi đã ghi nhận yêu cầu: \"{message}\". Tôi sẵn sàng thực hiện các thay đổi hoặc hỗ trợ thêm cho bài thuyết trình của bạn."
-                )
+                # Contextual conversational response
+                llm_response = ""
+                try:
+                    from autoslide.runtime.adapters import AntigravityAdapter
+                    adapter = AntigravityAdapter()
+                    if adapter.resolve_executable():
+                        prompt = (
+                            f"Bạn là AutoSlide AI Assistant, trợ lý chỉnh sửa slide bài thuyết trình PowerPoint chuẩn Canva. "
+                            f"Người dùng hỏi: '{message}'. Hãy trả lời thân thiện, súc tích (1-3 câu) bằng tiếng Việt."
+                        )
+                        llm_response = adapter.run_generate(prompt=prompt, timeout_seconds=8)
+                except Exception:
+                    pass
+
+                if llm_response and len(llm_response.strip()) > 5:
+                    assistant_reply = llm_response.strip()
+                else:
+                    assistant_reply = (
+                        f"Tôi đã hiểu yêu cầu của bạn về \"{message}\". "
+                        "Tôi có thể giúp bạn chỉnh sửa nội dung văn bản, phân tích số liệu trên slide, hoặc cập nhật giao diện Canva. "
+                        "Bạn muốn thực hiện thay đổi nào tiếp theo?"
+                    )
 
         next_state = ConversationState.EXECUTING if all_modified_slides else session.state
 
