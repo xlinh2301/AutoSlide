@@ -123,14 +123,15 @@
     <div class="canvas-main-column">
       <div class="canvas-diff-container">
         <!-- Left: Original Slide (Before) -->
-        <div class="canvas-panel canvas-before">
+        <div class="canvas-panel canvas-before" id="canvasBeforePanel">
           <div class="canvas-panel-header">
             <div class="panel-tag tag-before">
               <span class="tag-bullet"></span>
-              <span class="tag-title">Original Slide</span>
+              <span class="tag-title">Original Deck (Before)</span>
+              <span class="deck-count-badge" id="beforeDeckCountBadge">0 Slides</span>
             </div>
             <div class="panel-hint" id="paneHintOriginal">
-              <span class="hint-icon">🎯</span> Click-drag on slide to select target region
+              <span class="hint-icon">🎯</span> Click slide to inspect or target
             </div>
           </div>
 
@@ -173,14 +174,18 @@
               <button type="button" class="btn-secondary btn-retry" id="btnRetryBefore">Retry Loading</button>
             </div>
           </div>
+
+          <!-- Full-Deck All Slides List (Before) -->
+          <div class="deck-slides-list" id="beforeDeckList" aria-label="Original Deck All Slides"></div>
         </div>
 
         <!-- Right: Modified Slide (After) -->
-        <div class="canvas-panel canvas-after">
+        <div class="canvas-panel canvas-after" id="canvasAfterPanel">
           <div class="canvas-panel-header">
             <div class="panel-tag tag-after">
               <span class="tag-bullet"></span>
-              <span class="tag-title">Modified Slide</span>
+              <span class="tag-title">Modified Deck (After)</span>
+              <span class="deck-count-badge" id="afterDeckCountBadge">0 Slides</span>
               <span class="diff-badge" id="diffBadge" style="display: none;">Modified</span>
             </div>
             <div class="panel-status-label" id="afterStatusLabel">Awaiting Edit</div>
@@ -214,6 +219,9 @@
               <button type="button" class="btn-secondary btn-retry" id="btnRetryAfter">Retry Loading</button>
             </div>
           </div>
+
+          <!-- Full-Deck All Slides List (After) with Visual Highlights -->
+          <div class="deck-slides-list" id="afterDeckList" aria-label="Modified Deck All Slides"></div>
         </div>
       </div>
 
@@ -284,9 +292,15 @@
           <span class="chat-header-icon" aria-hidden="true">💬</span>
           <span class="chat-title-text">AutoSlide Agent</span>
         </div>
-        <div class="chat-header-status" id="chatHeaderStatus">
-          <span class="chat-status-dot"></span>
-          <span id="chatStatusText">Ready</span>
+        <div class="chat-header-controls">
+          <div class="chat-mode-switch" id="chatModeSwitch" title="Switch Chat Mode">
+            <button type="button" class="chat-mode-pill active" id="btnModeAgent" data-mode="agent">🤖 Agent</button>
+            <button type="button" class="chat-mode-pill" id="btnModePlan" data-mode="plan">📋 Plan</button>
+          </div>
+          <div class="chat-header-status" id="chatHeaderStatus">
+            <span class="chat-status-dot"></span>
+            <span id="chatStatusText">Ready</span>
+          </div>
         </div>
       </header>
 

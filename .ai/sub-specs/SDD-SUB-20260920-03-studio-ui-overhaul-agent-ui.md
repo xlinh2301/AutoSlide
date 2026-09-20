@@ -2,7 +2,7 @@
 id: SDD-SUB-20260920-03
 title: Dual-Column Canvas, Visual Change Highlights & Tool Calling Chat Rail
 author: agent-ui
-status: DRAFT # DRAFT | REVIEW | APPROVED | MERGED
+status: COMPLETED # DRAFT | REVIEW | APPROVED | MERGED | COMPLETED
 main_spec: "[[.ai/specs/ADS-003/requirements.md]]"
 summary: "Nâng cấp giao diện Studio với Dual-Column Canvas hiển thị toàn bộ slide Trước/Sau, Visual Change Highlights cho slide sửa đổi, và Chat Rail kết nối Real Agent Engine với các thẻ Tool Calling trực quan."
 decisions: 
@@ -27,7 +27,7 @@ risk_level: LOW # LOW | MEDIUM | HIGH
 > - Hiển thị 100% slide ở cả 2 cột Before và After với dữ liệu từ `GET /api/v1/sessions/{session_id}/deck`.
 > - Tự động cập nhật delta preview và highlight slide thay đổi ngay sau khi Agent kết thúc tool call.
 > - Hỗ trợ các thẻ hiển thị tool call và kết quả tool call trong chat stream.
-> **Rủi ro**: #risk/LOW | **Trạng thái**: #status/DRAFT
+> **Rủi ro**: #risk/LOW | **Trạng thái**: #status/COMPLETED
 
 ---
 
@@ -95,15 +95,15 @@ Hiện thực hóa **Task 3** trong kế hoạch phát triển `ADS-003` (Dual-C
 
 ## 4. Tiêu chí Chấp nhận (Acceptance Criteria)
 
-- [ ] **AC-3.1**: Dual-Column Canvas hiển thị 2 cột song song rõ ràng: Cột Trái (Before / Original Deck) và Cột Phải (After / Live Modified Deck).
-- [ ] **AC-3.2**: Khi tải tệp PPTX lên, toàn bộ các slide được render và hiển thị đầy đủ trên cả cột Before và cột After với độ tương đồng 100% (Before == After, ban đầu không có slide nào bị đánh dấu modified).
-- [ ] **AC-3.3**: Khi Agent thực thi tool sửa đổi slide (ví dụ `edit_slide_text`, `update_slide_style`), slide bị sửa đổi ở cột After kích hoạt **Visual Change Highlight**: viền phát sáng nổi bật và huy hiệu `MODIFIED`.
-- [ ] **AC-3.4**: Chat Rail gửi tin nhắn tới endpoint `POST /api/v1/sessions/{session_id}/chat` và nhận phản hồi tự nhiên từ Real Agent Engine.
-- [ ] **AC-3.5**: Khi Agent gọi tool, Chat Rail hiển thị trực quan các thẻ `ToolCallingCard` (thể hiện tool name, parameters, status) và `ToolResultCard` (thể hiện kết quả thực thi và danh sách slide bị ảnh hưởng).
-- [ ] **AC-3.6**: Sau khi Agent hoàn tất tool calling và trả về `modified_slide_indices`, frontend tự động gọi `GET /api/v1/sessions/{session_id}/deck` để cập nhật thumbnail cột After và Filmstrip.
-- [ ] **AC-3.7**: Thao tác nhấp chọn slide trên Filmstrip tự động cuộn Canvas đến slide tương ứng, và nhấp vào slide trên Canvas tự động đồng bộ selection state trên Filmstrip.
-- [ ] **AC-3.8**: Toàn bộ giao diện tiếp tục tuân thủ nghiêm ngặt Zero External Frontend Dependencies (không dùng CDN, không gọi tài nguyên ngoài).
-- [ ] **AC-3.9**: Toàn bộ unit và contract tests tại `tests/ui/test_studio_ui.py` chạy qua 100% không có lỗi.
+- [x] **AC-3.1**: Dual-Column Canvas hiển thị 2 cột song song rõ ràng: Cột Trái (Before / Original Deck) và Cột Phải (After / Live Modified Deck).
+- [x] **AC-3.2**: Khi tải tệp PPTX lên, toàn bộ các slide được render và hiển thị đầy đủ trên cả cột Before và cột After với độ tương đồng 100% (Before == After, ban đầu không có slide nào bị đánh dấu modified).
+- [x] **AC-3.3**: Khi Agent thực thi tool sửa đổi slide (ví dụ `edit_slide_text`, `update_slide_style`), slide bị sửa đổi ở cột After kích hoạt **Visual Change Highlight**: viền phát sáng nổi bật và huy hiệu `MODIFIED`.
+- [x] **AC-3.4**: Chat Rail gửi tin nhắn tới endpoint `POST /api/v1/sessions/{session_id}/chat` và nhận phản hồi tự nhiên từ Real Agent Engine.
+- [x] **AC-3.5**: Khi Agent gọi tool, Chat Rail hiển thị trực quan các thẻ `ToolCallingCard` (thể hiện tool name, parameters, status) và `ToolResultCard` (thể hiện kết quả thực thi và danh sách slide bị ảnh hưởng).
+- [x] **AC-3.6**: Sau khi Agent hoàn tất tool calling và trả về `modified_slide_indices`, frontend tự động gọi `GET /api/v1/sessions/{session_id}/deck` để cập nhật thumbnail cột After và Filmstrip.
+- [x] **AC-3.7**: Thao tác nhấp chọn slide trên Filmstrip tự động cuộn Canvas đến slide tương ứng, và nhấp vào slide trên Canvas tự động đồng bộ selection state trên Filmstrip.
+- [x] **AC-3.8**: Toàn bộ giao diện tiếp tục tuân thủ nghiêm ngặt Zero External Frontend Dependencies (không dùng CDN, không gọi tài nguyên ngoài).
+- [x] **AC-3.9**: Toàn bộ unit và contract tests tại `tests/ui/test_studio_ui.py` chạy qua 100% không có lỗi.
 
 ---
 
