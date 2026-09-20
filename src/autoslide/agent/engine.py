@@ -105,6 +105,17 @@ class AgentEngine:
             r"(?:đổi theme|đổi màu|đổi phong cách|áp dụng theme|change theme|apply theme|style)\s*(?:slide\s*(\d+))?\s*(?:thành|sang|to)?\s*(modern_dark|clean_light|corporate_blue|vibrant_accent|tối|sáng|xanh|tím)",
         ]
 
+        # Check slide content Q&A intent
+        # e.g., 'slide X có gì', 'nội dung slide X', 'tóm tắt slide X', 'trên slide X có những gì'
+        slide_qa_patterns = [
+            r"(?:trên|ở|trong)?\s*(?:slide|trang)\s*(\d+)?\s*(?:có gì|có những gì|nội dung gì|viết gì|gồm những gì|nói về gì|nói về cái gì|là gì|thế nào)",
+            r"(?:nội dung|tóm tắt|chi tiết|thông tin|phân tích)\s+(?:của\s+|trên\s+)?(?:slide|trang)\s*(\d+)?",
+            r"(?:xem|kiểm tra|đọc)\s+(?:nội dung\s+)?(?:slide|trang)\s*(\d+)",
+            r"(?:slide|trang)\s*(\d+)\s+(?:nội dung|tóm tắt|chi tiết|thông tin|có gì|viết gì)",
+            r"(?:what(?:'s| is) on|content of|summarize|details of)\s+(?:slide|page)\s*(\d+)?",
+            r"(?:slide|page)\s*(\d+)\s+(?:content|summary|details)",
+        ]
+
         # Check calculation / analysis intent
         analysis_patterns = [
             r"(?:tính|phân tích|đếm|tổng|trung bình|thống kê|analyze|count|calculate|sum|average)",
@@ -200,6 +211,21 @@ class AgentEngine:
                 ))
                 return tool_calls
 
+        # Evaluate slide content Q&A
+        for p in slide_qa_patterns:
+            m = re.search(p, msg_lower)
+            if m:
+                s_idx = 1
+                if m.groups() and m.group(1) and m.group(1).isdigit():
+                    s_idx = int(m.group(1))
+                elif getattr(context, "selected_slide_index", None):
+                    s_idx = int(context.selected_slide_index)
+                tool_calls.append(ToolCallRequest(
+                    tool_name="analyze_slide_content",
+                    arguments={"slide_index": s_idx, "query": message},
+                ))
+                return tool_calls
+
         # Evaluate calculation / analysis
         for p in analysis_patterns:
             if re.search(p, msg_lower):
@@ -259,14 +285,17 @@ class AgentEngine:
                         success_messages.append(f"Tôi đã cập nhật giao diện theme \"{r.arguments.get('theme')}\" cho slide {r.arguments.get('slide_index')}.")
                     elif r.tool_name == "analyze_slide_content":
                         analysis_text = r.result.get("analysis", "Phân tích hoàn tất.")
-                        success_messages.append(f"Kết quả phân tích bài thuyết trình: {analysis_text}")
+                        success_messages.append(analysis_text)
                     elif r.tool_name == "search_web":
                         src_count = len(r.result.get("results", []))
                         success_messages.append(f"Tôi đã tìm kiếm thông tin và thu thập {src_count} nguồn tham khảo liên quan.")
                 else:
                     success_messages.append(f"Không thể thực thi {r.tool_name}: {r.error}")
 
-            assistant_reply = " ".join(success_messages)
+            if len(success_messages) == 1:
+                assistant_reply = success_messages[0]
+            else:
+                assistant_reply = "\n\n".join(success_messages)
         else:
             # Natural conversational response for general queries / clarifications
             msg_lower = message.lower()

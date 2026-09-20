@@ -137,3 +137,24 @@ def test_agent_engine_conversational_fallback(agent_engine_setup):
     resp_help = engine.process_message(session=session, message="Bạn có thể giúp gì cho tôi?", context=context)
     assert len(resp_help.tool_calls) == 0
     assert "chỉnh sửa" in resp_help.assistant_message or "slide" in resp_help.assistant_message
+
+
+def test_agent_engine_slide_qa_intent(agent_engine_setup):
+    """Test agent identifies questions about slide content and outputs analysis directly."""
+    engine, session, context = agent_engine_setup
+
+    queries = [
+        ("slide 1 có gì", 1),
+        ("nội dung slide 1", 1),
+        ("tóm tắt slide 2", 2),
+        ("trên slide 1 có những gì", 1),
+    ]
+
+    for q, expected_idx in queries:
+        resp = engine.process_message(session=session, message=q, context=context)
+        assert len(resp.tool_calls) == 1
+        assert resp.tool_calls[0].tool_name == "analyze_slide_content"
+        assert resp.tool_calls[0].arguments["slide_index"] == expected_idx
+        assert f"Nội dung trên Slide {expected_idx} bao gồm:" in resp.assistant_message
+        assert "Tôi đã ghi nhận yêu cầu" not in resp.assistant_message
+

@@ -549,12 +549,17 @@ def create_app(
                         shutil.copy2(input_candidates[0], working_pptx)
             workspace = JobWorkspace(root=job_dir, job_id=session.job_id)
 
+        selected_idx = None
+        if payload.selection_context and payload.selection_context.slide_index:
+            selected_idx = payload.selection_context.slide_index
+
         tool_context = ToolExecutionContext(
             session_id=session_id,
             job_id=session.job_id,
             workspace=workspace,
             working_pptx_path=working_pptx,
             inventory=_provide_deck_inventory(session.job_id),
+            selected_slide_index=selected_idx,
         )
 
         user_turn = ChatTurn(

@@ -42,6 +42,7 @@ class ToolExecutionContext(BaseModel):
     working_pptx_path: Path | None = None
     inventory: DeckInventory | None = None
     research_service: ResearchService | None = None
+    selected_slide_index: int | None = None
 
 
 class ToolCallResult(BaseModel):
@@ -519,6 +520,10 @@ class SlideToolset:
         text_corpus: list[str] = []
         numbers: list[float] = []
 
+        target_slide_title: str = ""
+        target_slide_bullets: list[str] = []
+        target_shape_count: int = 0
+
         if context.working_pptx_path and context.working_pptx_path.exists():
             pkg_files = self._read_pkg(context.working_pptx_path)
             pres_tree = ET.fromstring(pkg_files["ppt/presentation.xml"])
@@ -530,6 +535,15 @@ class SlideToolset:
                 try:
                     s_path = _get_slide_path(pkg_files, s_idx)
                     s_tree = ET.fromstring(pkg_files[s_path])
+
+                    sp_tree = s_tree.find(".//p:spTree", NS)
+                    shapes = []
+                    if sp_tree is not None:
+                        for child in sp_tree:
+                            tag = child.tag.split("}")[-1] if "}" in child.tag else child.tag
+                            if tag not in ("nvGrpSpPr", "grpSpPr"):
+                                shapes.append(child)
+
                     slide_texts = [t.text for t in s_tree.findall(".//a:t", NS) if t.text]
                     slide_full = " ".join(slide_texts)
                     text_corpus.append(f"Slide {s_idx}: {slide_full}")
@@ -541,22 +555,84 @@ class SlideToolset:
                             numbers.append(float(n))
                         except ValueError:
                             pass
+
+                    # If this matches the target slide (or first slide when slide_index == 0)
+                    if s_idx == slide_index or (slide_index == 0 and not target_slide_title):
+                        target_shape_count = len(shapes)
+                        title_elem = None
+                        for elem in shapes:
+                            ph = elem.find(".//p:ph", NS)
+                            if ph is not None and ph.attrib.get("type", "") in ["title", "ctrTitle"]:
+                                title_elem = elem
+                                break
+
+                        if title_elem is not None:
+                            t_runs = [t.text.strip() for t in title_elem.findall(".//a:t", NS) if t.text and t.text.strip()]
+                            target_slide_title = " ".join(t_runs)
+
+                        for elem in shapes:
+                            if elem is title_elem:
+                                continue
+                            for p in elem.findall(".//a:p", NS):
+                                p_runs = [t.text.strip() for t in p.findall(".//a:t", NS) if t.text and t.text.strip()]
+                                p_text = " ".join(p_runs)
+                                if p_text and p_text not in target_slide_bullets:
+                                    target_slide_bullets.append(p_text)
+
+                        if not target_slide_title and target_slide_bullets:
+                            target_slide_title = target_slide_bullets.pop(0)
                 except Exception:
                     pass
+
+        # Fallback to context.inventory if PPTX file was not present or didn't yield text
+        if (not target_slide_title or target_shape_count == 0) and context.inventory and context.inventory.slides:
+            s_item = next((s for s in context.inventory.slides if s.slide_index == slide_index), None)
+            if s_item is None and context.inventory.slides:
+                s_item = context.inventory.slides[0]
+            if s_item:
+                target_shape_count = len(s_item.shapes)
+                for sh in s_item.shapes:
+                    sh_text = (sh.text or "").strip()
+                    if not sh_text:
+                        continue
+                    if not target_slide_title:
+                        target_slide_title = sh_text
+                    elif sh_text not in target_slide_bullets:
+                        target_slide_bullets.append(sh_text)
 
         joined_corpus = "\n".join(text_corpus)
         total_words = sum(len(txt.split()) for txt in text_corpus)
         sum_numbers = sum(numbers)
         avg_numbers = sum_numbers / len(numbers) if numbers else 0.0
 
-        # Perform heuristic answering based on query
-        analysis_summary = f"Scanned {len(text_corpus)} slides. Total word count: {total_words}."
-        if "tính" in query.lower() or "sum" in query.lower() or "tổng" in query.lower():
-            analysis_summary += f" Sum of numbers found: {sum_numbers:.2f}."
-        elif "trung bình" in query.lower() or "average" in query.lower():
-            analysis_summary += f" Average of numbers found: {avg_numbers:.2f}."
-        elif "đếm" in query.lower() or "count" in query.lower():
-            analysis_summary += f" Total slides analyzed: {len(text_corpus)}, total words: {total_words}."
+        if not target_slide_title:
+            target_slide_title = "(Không có tiêu đề)"
+
+        if slide_index >= 1:
+            if target_slide_bullets:
+                bullets_formatted = "\n".join(f"  - {b}" for b in target_slide_bullets)
+                detail_section = f"\n{bullets_formatted}"
+            else:
+                detail_section = " (Không có nội dung văn bản chi tiết)"
+
+            analysis_summary = (
+                f"Nội dung trên Slide {slide_index} bao gồm:\n"
+                f"• Tiêu đề: {target_slide_title}\n"
+                f"• Nội dung chi tiết:{detail_section}\n"
+                f"• Số lượng thành phần: {target_shape_count} shapes."
+            )
+            if any(k in query.lower() for k in ["tính", "tổng", "sum"]):
+                analysis_summary += f"\n• Tổng các số liệu tìm thấy: {sum_numbers:.2f}"
+            elif any(k in query.lower() for k in ["trung bình", "average"]):
+                analysis_summary += f"\n• Trung bình các số liệu tìm thấy: {avg_numbers:.2f}"
+        else:
+            analysis_summary = f"Kết quả phân tích bài thuyết trình: Scanned {len(text_corpus)} slides. Total word count: {total_words}."
+            if "tính" in query.lower() or "sum" in query.lower() or "tổng" in query.lower():
+                analysis_summary += f" Sum of numbers found: {sum_numbers:.2f}."
+            elif "trung bình" in query.lower() or "average" in query.lower():
+                analysis_summary += f" Average of numbers found: {avg_numbers:.2f}."
+            elif "đếm" in query.lower() or "count" in query.lower():
+                analysis_summary += f" Total slides analyzed: {len(text_corpus)}, total words: {total_words}."
 
         return ToolCallResult(
             tool_name="analyze_slide_content",
@@ -566,6 +642,9 @@ class SlideToolset:
                 "slide_index": slide_index,
                 "query": query,
                 "analysis": analysis_summary,
+                "title": target_slide_title,
+                "bullet_points": target_slide_bullets,
+                "shape_count": target_shape_count,
                 "corpus_sample": joined_corpus[:500],
                 "numbers_detected": numbers[:10],
             },
