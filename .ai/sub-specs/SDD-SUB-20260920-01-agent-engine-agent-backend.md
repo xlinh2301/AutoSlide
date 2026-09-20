@@ -2,7 +2,7 @@
 id: SDD-SUB-20260920-01
 title: Real Local Agent Engine, Toolset Dispatcher & Chat Endpoint
 author: agent-backend
-status: DRAFT # DRAFT | REVIEW | APPROVED | MERGED
+status: APPROVED # DRAFT | REVIEW | APPROVED | MERGED
 main_spec: "[[.ai/specs/ADS-003/requirements.md]]"
 summary: "Implement Real Local Agent Engine with multi-turn conversation, intelligent tool calling loop, 7 core slide manipulation/analysis tools, and wire to POST /api/v1/sessions/{session_id}/chat."
 decisions: 
