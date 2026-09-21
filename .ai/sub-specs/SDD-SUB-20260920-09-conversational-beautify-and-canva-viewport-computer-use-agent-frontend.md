@@ -2,7 +2,7 @@
 id: SDD-SUB-20260920-09
 title: Multi-turn Conversational Beautify, Session URL Persistence & Computer Use Visual Verification
 author: agent-frontend
-status: APPROVED # DRAFT | REVIEW | APPROVED | MERGED
+status: COMPLETED # DRAFT | REVIEW | APPROVED | MERGED
 main_spec: "[[.ai/specs/ADS-003/requirements.md]]"
 summary: "Khắc phục triệt để lỗi hội thoại lặp ('sửa slide 1' -> 'sửa cho đẹp hơn' -> 'sửa đi'), lưu ngữ cảnh active slide, bổ sung URL parameter ?session_id=... cho session persistence và kiểm thử thị giác tự động mô phỏng Computer Use bằng Chrome headless."
 decisions: 
@@ -25,7 +25,7 @@ risk_level: MEDIUM # LOW | MEDIUM | HIGH
 > [!ABSTRACT] Tóm tắt cho AI
 > **Mục tiêu**: Khắc phục triệt để lỗi hội thoại lặp ('sửa slide 1' -> 'sửa cho đẹp hơn' -> 'sửa đi'), lưu ngữ cảnh active slide, bổ sung URL parameter ?session_id=... cho session persistence và kiểm thử thị giác tự động mô phỏng Computer Use bằng Chrome headless.
 > **Quyết định then chốt**: Mở rộng beautify regex, kế thừa slide context qua các lượt hội thoại, auto-load session bằng URL query param, và chụp ảnh browser đối soát.
-> **Rủi ro**: #risk/MEDIUM | **Trạng thái**: #status/DRAFT
+> **Rủi ro**: #risk/MEDIUM | **Trạng thái**: #status/COMPLETED
 
 ---
 
@@ -35,14 +35,14 @@ risk_level: MEDIUM # LOW | MEDIUM | HIGH
   2. *"sửa cho đẹp hơn"* $\rightarrow$ Nhận diện ngay ý định `update_slide_style(slide_index=1, theme='clean_light')`.
   3. *"sửa đi"* hoặc *"ok sửa đi"* $\rightarrow$ Kích hoạt thực thi ngay lập tức, sinh ra ảnh delta `after/1.png` có viền amber glow và badge MODIFIED.
 - Khi người dùng tải lại trang hoặc mở link `http://localhost:8001/?session_id=...`, giao diện tự động khôi phục toàn bộ Canvas Dual-Column và Filmstrip.
-- Kiểm thử thị giác tự động mô phỏng Computer Use bằng Chrome headless chụp ảnh trình duyệt thực tế, lưu tại `computer_use_verified.png` và đối soát bằng thị giác.
+- Kiểm thử thị giác tự động mô phỏng Computer Use bằng Chrome headless chụp ảnh trình duyệt thực tế, lưu tại `computer_use_verified_delayed.png` và đối soát bằng thị giác.
 
 ---
 
 ## 2. Giả định & Rủi ro (Assumptions & Risks)
 - [x] **Giả định**: Session API `/api/v1/sessions/{id}/deck` trả về đầy đủ mảng slide kèm link ảnh preview.
-- [ ] **Rủi ro**: Regex có thể xung đột giữa lệnh hỏi nội dung và lệnh sửa nếu không phân lớp thứ tự ưu tiên chính xác.
-- [ ] **`[UNKNOWN]`**: Môi trường WSL không có sẵn X11 server cục bộ nên sử dụng Windows Chrome binary headless để chụp ảnh giao diện người dùng.
+- [x] **Rủi ro**: Regex có thể xung đột giữa lệnh hỏi nội dung và lệnh sửa nếu không phân lớp thứ tự ưu tiên chính xác.
+- [x] **`[UNKNOWN]`**: Môi trường WSL không có sẵn X11 server cục bộ nên sử dụng Windows Chrome binary headless để chụp ảnh giao diện người dùng.
 
 ---
 
@@ -67,11 +67,11 @@ risk_level: MEDIUM # LOW | MEDIUM | HIGH
 ---
 
 ## 4. Tiêu chí Chấp nhận (Acceptance Criteria)
-- [ ] Chuỗi lệnh *"sửa slide 1"* $\rightarrow$ *"sửa cho đẹp hơn"* kích hoạt ngay tool `update_slide_style(slide_index=1, theme='clean_light')`.
-- [ ] Chuỗi lệnh *"sửa slide 1"* $\rightarrow$ *"sửa đi"* kích hoạt ngay tool làm đẹp cho Slide 1.
-- [ ] Truy cập `/?session_id=...` tự động nạp deck và render danh sách slide lên Canvas.
-- [ ] Ảnh chụp màn hình từ Chrome headless xác nhận Slide 1 hiển thị đầy đủ tiêu đề, nội dung và sau khi sửa có viền MODIFIED.
-- [ ] Toàn bộ test suite chạy pass 100%.
+- [x] Chuỗi lệnh *"sửa slide 1"* $\rightarrow$ *"sửa cho đẹp hơn"* kích hoạt ngay tool `update_slide_style(slide_index=1, theme='clean_light')`.
+- [x] Chuỗi lệnh *"sửa slide 1"* $\rightarrow$ *"sửa đi"* kích hoạt ngay tool làm đẹp cho Slide 1.
+- [x] Truy cập `/?session_id=...` tự động nạp deck và render danh sách slide lên Canvas.
+- [x] Ảnh chụp màn hình từ Chrome headless xác nhận Slide 1 hiển thị đầy đủ tiêu đề, nội dung và sau khi sửa có viền MODIFIED.
+- [x] Toàn bộ test suite chạy pass 100%.
 
 ---
 
