@@ -919,6 +919,20 @@ def create_app(
         except Exception:
             pass
 
+        # Enrich missing titles from direct PPTX extraction
+        input_files = list((workspace.root / "input").glob("*.pptx"))
+        if input_files:
+            try:
+                from autoslide.ingest.renderer import _extract_slide_titles_and_shapes
+                extracted_titles, _, _ = _extract_slide_titles_and_shapes(input_files[0])
+                for idx, t_val in extracted_titles.items():
+                    if t_val and idx not in titles_map:
+                        titles_map[idx] = t_val
+                if not slide_count and extracted_titles:
+                    slide_count = len(extracted_titles)
+            except Exception:
+                pass
+
         # If preview thumbnails have not been generated yet, try to ingest
         if not list(workspace.before_previews_dir.glob("*.png")):
             input_files = list((workspace.root / "input").glob("*.pptx"))
