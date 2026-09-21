@@ -29,3 +29,6 @@ SESSION_STATE.json
 # Git worktrees
 worktree/
 .ai/skills/
+
+# Scratch screenshots and debug images
+*.png
