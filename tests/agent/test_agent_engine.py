@@ -205,9 +205,37 @@ def test_agent_engine_beautify_custom_intent(agent_engine_setup):
     """Test custom / beautify commands route to update_slide_style."""
     engine, session, context = agent_engine_setup
 
-    for msg, expected_slide in [("custom sao cho đẹp tí", 1), ("làm đẹp slide 2", 2), ("sao cũng đc", 1)]:
+    for msg, expected_slide in [("custom sao cho đẹp tí", 1), ("làm đẹp slide 2", 2), ("sao cũng đc", 1), ("sửa cho đẹp hơn", 1), ("sửa slide 2 cho đẹp hơn", 2)]:
         resp = engine.process_message(session=session, message=msg, context=context)
         assert len(resp.tool_calls) == 1, f"Failed on: {msg}"
         assert resp.tool_calls[0].tool_name == "update_slide_style"
         assert resp.tool_calls[0].arguments["slide_index"] == expected_slide
+
+
+def test_agent_engine_multi_turn_sua_slide_1_dep_hon_sua_di(agent_engine_setup):
+    """Test exact user interaction: 'sửa slide 1' -> 'sửa cho đẹp hơn' -> 'sửa đi'."""
+    engine, session, context = agent_engine_setup
+    from autoslide.conversation.models import ChatTurn
+
+    # Turn 1: user says "sửa slide 1"
+    resp1 = engine.process_message(session=session, message="sửa slide 1", context=context)
+    assert len(resp1.tool_calls) == 0
+    assert "Slide 1" in resp1.assistant_message
+    session = session.with_turn(ChatTurn(id="t1", role="user", content="sửa slide 1"))
+    session = session.with_turn(ChatTurn(id="t2", role="assistant", content=resp1.assistant_message))
+
+    # Turn 2: user says "sửa cho đẹp hơn" -> should inherit Slide 1 and run update_slide_style
+    resp2 = engine.process_message(session=session, message="sửa cho đẹp hơn", context=context)
+    assert len(resp2.tool_calls) == 1
+    assert resp2.tool_calls[0].tool_name == "update_slide_style"
+    assert resp2.tool_calls[0].arguments["slide_index"] == 1
+    session = session.with_turn(ChatTurn(id="t3", role="user", content="sửa cho đẹp hơn"))
+    session = session.with_turn(ChatTurn(id="t4", role="assistant", content=resp2.assistant_message))
+
+    # Turn 3: user says "sửa đi" -> should re-execute or confirm update_slide_style on Slide 1
+    resp3 = engine.process_message(session=session, message="sửa đi", context=context)
+    assert len(resp3.tool_calls) == 1
+    assert resp3.tool_calls[0].tool_name == "update_slide_style"
+    assert resp3.tool_calls[0].arguments["slide_index"] == 1
+
 

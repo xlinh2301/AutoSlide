@@ -51,6 +51,33 @@ class AgentContext(BaseModel):
     selected_slide_index: int | None = None
 
 
+def _find_recent_slide_index(session: ConversationSession | None, default: int = 1) -> int:
+    """Find the most recently referenced slide index from prior user turns."""
+    if not session or not session.turns:
+        return default
+    for turn in reversed(session.turns):
+        if turn.role == "user" and turn.content:
+            m = re.search(r"(?:slide|trang)\s*(\d+)", turn.content, re.IGNORECASE)
+            if m:
+                return int(m.group(1))
+    return default
+
+
+def _has_recent_beautify_or_edit(session: ConversationSession | None) -> tuple[str | None, int]:
+    """Check if previous user turns contained beautify or slide edit requests."""
+    if not session or not session.turns:
+        return None, 1
+    recent_slide = _find_recent_slide_index(session, default=1)
+    for turn in reversed(session.turns):
+        if turn.role == "user" and turn.content:
+            txt = turn.content.lower()
+            if any(w in txt for w in ["đẹp", "beautify", "style", "theme", "canva", "sao cũng"]):
+                return "beautify", recent_slide
+            if any(w in txt for w in ["sửa", "đổi", "thay", "chỉnh"]):
+                return "edit_or_beautify", recent_slide
+    return None, recent_slide
+
+
 class AgentEngine:
     """Intelligent conversational AI engine with Tool Calling capabilities for AutoSlide."""
 
@@ -102,7 +129,7 @@ class AgentEngine:
         if any(re.search(p, msg_lower) for p in confirm_patterns):
             if session and session.turns:
                 for turn in reversed(session.turns):
-                    if turn.role == "user" and turn.content:
+                    if turn.role == "user" and turn.content and turn.content != message:
                         for p in edit_patterns:
                             m_prev = re.search(p, turn.content, re.IGNORECASE)
                             if m_prev:
@@ -119,19 +146,31 @@ class AgentEngine:
                                         },
                                     ))
                                     return tool_calls
+                # Check recent beautify intent
+                intent, s_idx = _has_recent_beautify_or_edit(session)
+                if intent:
+                    tool_calls.append(ToolCallRequest(
+                        tool_name="update_slide_style",
+                        arguments={"slide_index": s_idx, "theme": "clean_light"},
+                    ))
+                    return tool_calls
 
-        # 3. Beautify / Custom theme intent (e.g., "custom sao cho đẹp tí", "làm đẹp slide 1", "sao cũng đc")
+        # 3. Beautify / Custom theme intent (e.g., "sửa cho đẹp hơn", "custom sao cho đẹp tí", "làm đẹp slide 1", "sao cũng đc")
         beautify_patterns = [
-            r"(?:custom|làm đẹp|tối ưu|thiết kế|format|style|chỉnh lại|trang trí)\s*(?:cho\s+)?(?:đẹp|xịn|hiện đại|chuẩn canva|tươi)?",
+            r"(?:sửa|chỉnh|làm|thay|biến|custom|format|style|tối ưu|thiết kế|trang trí)\s*(?:lại\s+)?(?:cho\s+)?(?:nó\s+)?(?:đẹp|xịn|hiện đại|chuẩn canva|tươi|pro|chuyên nghiệp|bắt mắt)",
+            r"(?:sửa|chỉnh|làm)\s+(?:slide\s*\d+\s+)?(?:cho\s+)?đẹp(?:\s+hơn|\s+tí|\s+chút|\s+đi)?",
+            r"(?:đẹp\s+hơn|cho\s+đẹp\s+hơn|đẹp\s+tí|đẹp\s+chút|cho\s+đẹp)",
             r"^(?:sao cũng đ(?:ược|c)|thế nào cũng đ(?:ược|c)|tùy bạn)$",
         ]
         if any(re.search(p, msg_lower) for p in beautify_patterns):
-            s_idx = 1
-            if getattr(context, "selected_slide_index", None):
-                s_idx = int(context.selected_slide_index)
+            s_idx = None
             s_match = re.search(r"(?:slide|trang)\s*(\d+)", msg_lower)
             if s_match:
                 s_idx = int(s_match.group(1))
+            elif getattr(context, "selected_slide_index", None):
+                s_idx = int(context.selected_slide_index)
+            else:
+                s_idx = _find_recent_slide_index(session, default=1)
             tool_calls.append(ToolCallRequest(
                 tool_name="update_slide_style",
                 arguments={"slide_index": s_idx, "theme": "clean_light"},
@@ -415,6 +454,15 @@ class AgentEngine:
                         assistant_reply = "Tôi có thể hỗ trợ bạn xem lại bài thuyết trình. Hãy cho tôi biết slide bạn muốn xem."
                 else:
                     assistant_reply = "Chưa có bài thuyết trình nào được nạp. Hãy tải lên file .pptx để tôi phân tích nhé!"
+            elif re.search(r"^(?:sửa|chỉnh|thay|xem)\s+(?:slide|trang)\s*(\d+)$", msg_lower):
+                m_slide = re.search(r"^(?:sửa|chỉnh|thay|xem)\s+(?:slide|trang)\s*(\d+)$", msg_lower)
+                s_num = m_slide.group(1) if m_slide else "1"
+                assistant_reply = (
+                    f"Tôi đã chọn **Slide {s_num}** cho bạn! Bạn muốn:\n"
+                    f"• Đổi tiêu đề: ví dụ *'sửa tiêu đề slide {s_num} thành Tên Mới'*\n"
+                    f"• Tối ưu giao diện Canva: chỉ cần nói *'sửa cho đẹp hơn'* hoặc *'custom sao cho đẹp tí'*!\n"
+                    f"Hãy cho tôi biết mong muốn của bạn nhé."
+                )
             else:
                 # Contextual conversational response
                 llm_response = ""

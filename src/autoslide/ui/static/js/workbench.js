@@ -157,6 +157,15 @@
     setupChatListeners();
     updateScopeUI();
     updateChatSelectionContext({ slide_index: activeSlideIndex });
+
+    // Restore session if present in URL query param or localStorage
+    const urlParams = new URLSearchParams(window.location.search);
+    const sessionFromUrl = urlParams.get("session_id") || localStorage.getItem("autoslide_active_session_id");
+    if (sessionFromUrl) {
+      activeSessionId = sessionFromUrl;
+      if (chatStatusText) chatStatusText.textContent = "Session Restored";
+      loadSessionDeck(sessionFromUrl);
+    }
   });
 
   /* ==========================================================================
@@ -372,6 +381,15 @@
       activeSessionId = data.session_id;
       if (data.job_id) {
         currentJobId = data.job_id;
+      }
+
+      try {
+        localStorage.setItem("autoslide_active_session_id", activeSessionId);
+        const currentUrl = new URL(window.location.href);
+        currentUrl.searchParams.set("session_id", activeSessionId);
+        window.history.replaceState(null, "", currentUrl.toString());
+      } catch (e) {
+        console.warn("Could not save session URL state:", e);
       }
 
       if (chatStatusText) chatStatusText.textContent = "Session Active";
